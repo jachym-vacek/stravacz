@@ -51,7 +51,7 @@ const HELP: &[(&str, &str)] = &[
 ];
 
 pub fn help(frame: &mut Frame, area: Rect) {
-    let height = u16::try_from(HELP.len()).unwrap_or(u16::MAX) + 4;
+    let height = u16::try_from(HELP.len()).unwrap_or(u16::MAX) + 6;
     let inner = card(
         frame,
         centered(area, 50, height),
@@ -70,6 +70,9 @@ pub fn help(frame: &mut Frame, area: Rect) {
             ])
         })
         .collect();
+    lines.push(Line::default());
+    lines
+        .push(Line::styled("Unofficial, not affiliated with Strava.cz", theme::faint()).centered());
     lines.push(Line::default());
     lines.push(Line::styled("press any key to close", theme::faint()).centered());
     frame.render_widget(ratatui::widgets::Paragraph::new(lines), inner);

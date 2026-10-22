@@ -10,7 +10,8 @@ use clap_complete::Shell;
     propagate_version = true,
     styles = crate::style::help(),
     after_help = "Run `stravacz login` once; the password is kept in the system keyring.\n\
-                  For scripts, set STRAVA_PASSWORD (and STRAVA_CANTEEN, STRAVA_USERNAME)."
+                  For scripts, set STRAVA_PASSWORD (and STRAVA_CANTEEN, STRAVA_USERNAME).\n\n\
+                  Unofficial client, not affiliated with Strava.cz or VIS Plzeň, s.r.o."
 )]
 pub struct Cli {
     #[command(flatten)]
