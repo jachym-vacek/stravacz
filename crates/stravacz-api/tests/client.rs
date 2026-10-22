@@ -38,6 +38,17 @@ async fn logged_in() -> (MockServer, Session) {
     (server, session)
 }
 
+#[test]
+fn rejects_invalid_base_urls() {
+    for url in ["", "127.0.0.1:8555", "ftp://example.com", "http://exa mple.com"] {
+        assert!(
+            matches!(Client::with_base_url(url), Err(Error::InvalidBaseUrl(_))),
+            "{url:?}"
+        );
+    }
+    assert!(Client::with_base_url("http://127.0.0.1:8555/").is_ok());
+}
+
 #[tokio::test]
 async fn login_reads_the_account() {
     let (_server, session) = logged_in().await;

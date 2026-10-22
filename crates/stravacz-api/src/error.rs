@@ -17,6 +17,11 @@ pub enum Error {
     #[error("{message}")]
     Api { code: Option<i64>, message: String },
 
+    /// The server address given to [`Client::with_base_url`](crate::Client::with_base_url)
+    /// is not an `http(s)` URL.
+    #[error("invalid server URL `{0}`")]
+    InvalidBaseUrl(String),
+
     /// The request never got a response.
     #[error("could not reach Strava.cz: {source}")]
     Transport {

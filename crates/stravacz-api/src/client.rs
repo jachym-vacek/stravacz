@@ -64,7 +64,13 @@ impl Client {
 
     /// Talk to a different host, e.g. a mock server in tests.
     pub fn with_base_url(base_url: &str) -> Result<Self> {
+        let invalid = || Error::InvalidBaseUrl(base_url.to_owned());
         let base_url = base_url.trim_end_matches('/');
+        let url = reqwest::Url::parse(base_url).map_err(|_| invalid())?;
+        if !matches!(url.scheme(), "http" | "https") || !url.has_host() {
+            return Err(invalid());
+        }
+        let header_value = |value: &str| HeaderValue::from_str(value).map_err(|_| invalid());
 
         let mut headers = HeaderMap::new();
         headers.insert(header::ACCEPT, HeaderValue::from_static("*/*"));
@@ -72,12 +78,11 @@ impl Client {
             header::ACCEPT_LANGUAGE,
             HeaderValue::from_static("en-US,en;q=0.9,cs;q=0.8"),
         );
-        if let Ok(origin) = HeaderValue::from_str(base_url) {
-            headers.insert(header::ORIGIN, origin);
-        }
-        if let Ok(referer) = HeaderValue::from_str(&format!("{base_url}{LOGIN_PAGE}")) {
-            headers.insert(header::REFERER, referer);
-        }
+        headers.insert(header::ORIGIN, header_value(base_url)?);
+        headers.insert(
+            header::REFERER,
+            header_value(&format!("{base_url}{LOGIN_PAGE}"))?,
+        );
 
         let http = reqwest::Client::builder()
             .user_agent(USER_AGENT)
