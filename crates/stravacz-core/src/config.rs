@@ -29,6 +29,14 @@ pub struct SavedLogin {
     pub remember_password: bool,
 }
 
+impl SavedLogin {
+    /// Whether both refer to the same account (and keyring entry).
+    #[must_use]
+    pub fn is_same_account(&self, other: &Self) -> bool {
+        self.canteen == other.canteen && self.username == other.username
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
     #[error("could not determine the config directory")]
@@ -84,12 +92,22 @@ impl ConfigStore {
         }
     }
 
+    /// Save the config atomically: readers see the old file or the new one,
+    /// never a half-written one.
     pub fn save(&self, config: &Config) -> Result<(), ConfigError> {
         let text = toml::to_string_pretty(config)?;
         if let Some(dir) = self.path.parent() {
             fs::create_dir_all(dir).map_err(|source| self.io_error(source))?;
         }
-        fs::write(&self.path, text).map_err(|source| self.io_error(source))
+        let mut temp = self.path.clone().into_os_string();
+        temp.push(".tmp");
+        let temp = PathBuf::from(temp);
+        fs::write(&temp, text)
+            .and_then(|()| fs::rename(&temp, &self.path))
+            .map_err(|source| {
+                let _ = fs::remove_file(&temp);
+                self.io_error(source)
+            })
     }
 
     fn io_error(&self, source: io::Error) -> ConfigError {
@@ -120,6 +138,7 @@ mod tests {
         };
         store.save(&config).unwrap();
         assert_eq!(store.load().unwrap(), config);
+        assert!(!dir.join("nested/config.toml.tmp").exists());
 
         fs::remove_dir_all(dir).unwrap();
     }
