@@ -239,6 +239,8 @@ impl Session {
             s5url,
             account,
         } = &*self.inner;
+        // The web app sends the balance it knows; this is the one from login and
+        // goes stale after orders. The server does not appear to rely on it.
         #[allow(clippy::cast_precision_loss)] // Informational only, precision does not matter.
         let balance = account.balance.hundredths() as f64 / 100.0;
         let response = self
