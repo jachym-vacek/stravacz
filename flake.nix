@@ -70,6 +70,20 @@
         {
           packages.default = package;
 
+          # `nix run` starts the TUI; `nix run .#stravacz` the CLI.
+          apps =
+            let
+              app = bin: description: {
+                type = "app";
+                program = "${package}/bin/${bin}";
+                meta = { inherit description; };
+              };
+            in
+            {
+              default = app "stravacz-tui" "Order canteen meals from Strava.cz in your terminal";
+              stravacz = app "stravacz" "Order canteen meals from Strava.cz on the command line";
+            };
+
           checks = {
             inherit package;
 
@@ -115,6 +129,8 @@
             packages = [
               pkgs.rust-analyzer
               pkgs.cargo-nextest
+              # `dist` builds the GitHub release artifacts (see `dist-workspace.toml`).
+              pkgs.cargo-dist
             ];
             RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
           };
@@ -126,6 +142,7 @@
     in
     {
       packages = lib.mapAttrs (_: s: s.packages) bySystem;
+      apps = lib.mapAttrs (_: s: s.apps) bySystem;
       checks = lib.mapAttrs (_: s: s.checks) bySystem;
       devShells = lib.mapAttrs (_: s: s.devShells) bySystem;
       formatter = lib.mapAttrs (_: s: s.formatter) bySystem;

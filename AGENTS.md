@@ -17,6 +17,8 @@ nix flake check                                           # what CI runs: build,
 nix fmt                                                   # format flake.nix
 ```
 
+Releases: pushing a `v*` tag that matches the workspace version runs `.github/workflows/release.yml`, which builds both binaries with `dist` and publishes a GitHub release. That workflow is generated from `dist-workspace.toml`; do not edit it by hand, change the config and run `nix develop --command dist generate` (its `plan` job fails on pull requests if the two are out of sync).
+
 Workspace lints (root `Cargo.toml`) enable `clippy::pedantic` and forbid `unsafe`; keep clippy at zero warnings.
 
 ## Running without a real account
