@@ -18,5 +18,3 @@ targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-musl", "x86_64-apple-d
 install-path = "CARGO_HOME"
 # Whether to install an updater program
 install-updater = false
-# TEMPORARY: build all artifacts on pull requests to verify the targets.
-pr-run-mode = "upload"
