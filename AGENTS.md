@@ -47,6 +47,7 @@ Layered workspace; frontends must not talk HTTP or touch config/keyring directly
 - Field types vary between canteens (`"1"` vs `1`, `null` vs `""`), so raw structs read everything leniently as text and convert afterwards. Bad rows are skipped with a `tracing::warn!`, never fatal.
 - The menu (`objednavky`) is `table0…tableN`, one per day. In `omezeniObj`, `obj`/`zm` decide whether a meal can be ordered/cancelled; `den` describes the whole day only and must never be used for meal orderability. Rows of no-service days and unpublished slots (name == slot label, e.g. `Oběd 2`) are dropped, keeping the day.
 - The menu request sends the session URL as `s5url`; write endpoints send it as `url`.
+- Requests carry an honest `stravacz/<version>` User-Agent; the API does not filter on it (login answers the same to a browser and to `curl`), so do not go back to impersonating a browser. Keep the "unofficial, not affiliated" disclaimer in the README, CLI help and TUI help.
 - Ordering is transactional: `Session::submit` stages each change with `pridejJidloS5` (cancellations first), commits with `saveOrders`, calls `nactiVlastnostiPA` to discard staged changes on failure, then refetches the menu and reports changes that did not apply in `Submission::rejected`. Once `saveOrders` succeeds, submit never fails: if the refetch fails, `Submission::menu` is `None` (unverified).
 
 ### Ordering rules (stravacz-core `OrderDraft`)

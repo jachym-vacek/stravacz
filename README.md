@@ -5,6 +5,18 @@ ordering system: a full-screen TUI (`stravacz-tui`) and a scriptable CLI (`strav
 Browse the menu, order or cancel lunches, and see your balance without opening a
 browser.
 
+> [!IMPORTANT]
+> **Unofficial project.** stravacz is an independent, community-made client. It is
+> not affiliated with, endorsed by, or supported by VIS Plzeň, s.r.o., the company
+> behind Strava.cz, nor with Strava, Inc. (the fitness app). "Strava.cz" is used
+> only to say which service this program works with. Do not contact your canteen or
+> VIS Plzeň about problems with stravacz; [open an issue](https://github.com/jachym-vacek/stravacz/issues)
+> instead.
+>
+> stravacz talks to an undocumented API that can change or break at any time.
+> Always check that your order went through, and use it at your own risk: the
+> software comes with no warranty (see [License](#license)).
+
 ## TUI
 
 ```sh
@@ -89,7 +101,10 @@ STRAVA_BASE_URL=http://127.0.0.1:8555 nix develop --command cargo run -p stravac
 The same fake canteen is available to tests as `stravacz_api::mock` (feature `mock`).
 
 The API was reverse engineered from the web app, with help from
-[strava-cz-python](https://github.com/jsem-nerad/strava-cz-python).
+[strava-cz-python](https://github.com/jsem-nerad/strava-cz-python), only to make
+this client interoperate with it. No Strava.cz code or data is included. Requests
+identify themselves with the User-Agent `stravacz/<version> (unofficial client; +<repo URL>)`
+and are only made when you ask for something: nothing polls in the background.
 
 ## License
 
