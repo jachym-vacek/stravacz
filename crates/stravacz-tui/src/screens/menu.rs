@@ -59,14 +59,22 @@ impl MenuScreen {
     /// Show a freshly loaded menu, keeping the selection and pending changes.
     pub fn set_menu(&mut self, menu: Menu) {
         let date = self.current_day().map(|day| day.date);
+        let meal = self.current_meal().map(|meal| meal.id);
+        let index = self.meals.selected();
         self.menu = menu;
         self.draft.rebase(&self.menu);
-        let meal = self.meals.selected();
-        match date {
-            Some(date) => self.go_to_date(date),
-            None => self.go_to_date(Local::now().date_naive()),
-        }
-        self.meals.select(meal);
+        self.go_to_date(date.unwrap_or_else(|| Local::now().date_naive()));
+
+        // The same meal, wherever it is now; else the same row of the same day.
+        let same_day = self.current_day().map(|day| day.date) == date;
+        let position = meal.and_then(|id| {
+            self.current_day()?
+                .meals
+                .iter()
+                .position(|meal| meal.id == id)
+        });
+        self.meals
+            .select(position.or(index.filter(|_| same_day)).or(Some(0)));
         self.clamp_meal();
     }
 
@@ -611,6 +619,30 @@ mod tests {
 
         assert_eq!(screen.draft.changes(), [api::Change::order(lunches[1])]);
         assert!(toast.message().contains("1 of them"), "{}", toast.message());
+    }
+
+    #[tokio::test]
+    async fn reload_keeps_the_selected_meal() {
+        let (_server, mut screen) = screen().await;
+        let lunch = open_lunches(&screen.menu, 1)[0];
+        let date = screen.menu.meal(lunch).unwrap().date;
+        screen.go_to_date(date);
+        let index = screen
+            .current_day()
+            .unwrap()
+            .meals
+            .iter()
+            .position(|meal| meal.id == lunch);
+        screen.meals.select(index);
+
+        // The day loses its first item, so every meal moves up a row.
+        let mut days = screen.menu.days().to_vec();
+        days.iter_mut()
+            .filter(|day| day.date == date)
+            .for_each(|day| drop(day.meals.remove(0)));
+        screen.set_menu(Menu::new(days));
+
+        assert_eq!(screen.current_meal().map(|meal| meal.id), Some(lunch));
     }
 
     #[test]
