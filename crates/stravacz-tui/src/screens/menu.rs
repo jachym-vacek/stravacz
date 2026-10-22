@@ -86,15 +86,21 @@ impl MenuScreen {
         self.set_menu(menu);
 
         let rejected = submission.rejected.len();
-        if rejected == 0 {
-            Toast::success(match requested {
+        // Rebasing drops rejected changes that can't be made anymore.
+        let pending = self.draft.len();
+        let not_applied = format!("The canteen did not apply {rejected} of {requested} changes");
+        match (rejected, pending) {
+            (0, _) => Toast::success(match requested {
                 1 => "Order saved.".to_owned(),
                 n => format!("{n} changes saved."),
-            })
-        } else {
-            Toast::warning(format!(
-                "The canteen did not apply {rejected} of {requested} changes; they are still pending."
-            ))
+            }),
+            (_, 0) => Toast::warning(format!("{not_applied}, and they can't be made anymore.")),
+            (_, pending) if pending == rejected => {
+                Toast::warning(format!("{not_applied}; they are still pending."))
+            }
+            (_, pending) => Toast::warning(format!(
+                "{not_applied}; {pending} of them can still be saved and are pending."
+            )),
         }
     }
 
@@ -541,7 +547,71 @@ fn wrap(text: &str, width: usize) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::wrap;
+    use stravacz_core::api::{self, Client, Credentials, MealId, Restriction, mock};
+    use wiremock::MockServer;
+
+    use super::*;
+
+    async fn screen() -> (MockServer, MenuScreen) {
+        let server = mock::start().await;
+        let session = Client::with_base_url(&server.uri())
+            .unwrap()
+            .login(&Credentials::new("1234", "jan.novak", "secret"))
+            .await
+            .unwrap();
+        let menu = session.menu().await.unwrap();
+        (server, MenuScreen::new(session, menu))
+    }
+
+    /// The first open, unordered lunch on each of the first `count` days with one.
+    fn open_lunches(menu: &Menu, count: usize) -> Vec<MealId> {
+        let lunches: Vec<MealId> = menu
+            .days()
+            .iter()
+            .filter_map(|day| {
+                day.meals
+                    .iter()
+                    .find(|meal| meal.kind == MealKind::Main && meal.can_order() && !meal.ordered)
+            })
+            .map(|meal| meal.id)
+            .take(count)
+            .collect();
+        assert_eq!(lunches.len(), count, "enough open lunches on the mock menu");
+        lunches
+    }
+
+    /// `menu` with `edit` applied to every meal.
+    fn edited(menu: &Menu, edit: impl Fn(&mut Meal)) -> Menu {
+        let mut days = menu.days().to_vec();
+        days.iter_mut()
+            .flat_map(|day| &mut day.meals)
+            .for_each(edit);
+        Menu::new(days)
+    }
+
+    #[tokio::test]
+    async fn partial_submit_counts_what_is_still_pending() {
+        let (_server, mut screen) = screen().await;
+        let lunches = open_lunches(&screen.menu, 2);
+        for &id in &lunches {
+            screen.draft.toggle(&screen.menu, id).unwrap();
+        }
+
+        // Neither was applied, and the first one's deadline has passed.
+        let menu = edited(&screen.menu, |meal| {
+            if meal.id == lunches[0] {
+                meal.order_restriction = Restriction::Closed;
+            }
+        });
+        let toast = screen.finish_submit(Submission {
+            menu: Some(menu),
+            balance: None,
+            rejected: lunches.clone(),
+        });
+
+        assert_eq!(screen.draft.changes(), [api::Change::order(lunches[1])]);
+        assert!(toast.message().contains("1 of them"), "{}", toast.message());
+    }
 
     #[test]
     fn wraps_words() {
