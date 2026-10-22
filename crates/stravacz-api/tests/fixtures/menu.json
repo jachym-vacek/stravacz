@@ -1,0 +1,26 @@
+{
+  "table0": [
+    { "datum": "01.09.2026", "druh": "O1", "druh_popis": "Oběd 1", "nazev": "Nevaří se",
+      "cena": "50.00", "pocet": 0, "veta": "1", "alergeny": [],
+      "omezeniObj": { "den": "VP", "obj": "V", "zm": "C" }, "casKonec": "2026-08-31T15:00:00" }
+  ],
+  "table1": [
+    { "datum": "02.09.2026", "druh": "PO", "druh_popis": "Polévka", "nazev": "Hovězí vývar s kapáním",
+      "cena": "0", "pocet": 1, "veta": "85", "alergeny": [["01", "Obiloviny obsahující lepek"], ["09", "Celer"]],
+      "omezeniObj": { "den": "", "obj": "I", "zm": "I" }, "casKonec": "2026-09-01T15:00:00" },
+    { "datum": "02.09.2026", "druh": "O1", "druh_popis": "Oběd 1", "nazev": "Kuřecí řízek, bramborová kaše",
+      "cena": "50.00", "pocet": "1", "veta": 86, "alergeny": null,
+      "omezeniObj": { "den": "", "obj": "", "zm": "" }, "casKonec": "2026-09-01T15:00:00" },
+    { "datum": "02.09.2026", "druh": "O2", "druh_popis": "Oběd 2", "nazev": "Oběd 2",
+      "cena": "50.00", "pocet": 0, "veta": "87",
+      "omezeniObj": { "den": "", "obj": "", "zm": "" } }
+  ],
+  "table2": [
+    { "datum": "03.09.2026", "druh": "O1", "druh_popis": "Oběd 1", "nazev": "Špagety s boloňskou omáčkou",
+      "cena": "52.50", "pocet": 0, "veta": "88",
+      "omezeniObj": { "den": "T", "obj": "", "zm": "" } },
+    { "datum": "03.09.2026", "druh": "O2", "druh_popis": "Oběd 2", "nazev": "Zeleninové rizoto",
+      "cena": "52.50", "pocet": 0, "veta": "89",
+      "omezeniObj": { "den": "T", "obj": "C", "zm": "C" } }
+  ]
+}

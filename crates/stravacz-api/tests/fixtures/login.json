@@ -1,0 +1,15 @@
+{
+  "sid": "0123456789ABCDEF",
+  "s5url": "https://wss5.strava.cz/WSStravne5_15/WSStravne5.svc",
+  "cislo": "1234",
+  "jmeno": "jan.novak",
+  "uzivatel": {
+    "konto": "512.50",
+    "jmeno": "Jan Novák",
+    "email": "jan@example.com",
+    "id": "jan.novak",
+    "mena": "Kč",
+    "cislo": "1234",
+    "nazevJidelny": "Školní jídelna Test"
+  }
+}
