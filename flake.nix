@@ -45,8 +45,9 @@
             inherit (craneLib.crateNameFromCargoToml { cargoToml = ./Cargo.toml; }) version;
             inherit src;
             strictDeps = true;
-            # aws-lc-rs (rustls' crypto provider) is built from C sources.
-            nativeBuildInputs = [ pkgs.cmake ];
+            # The Secret Service keyring store links libdbus.
+            nativeBuildInputs = lib.optionals pkgs.stdenv.hostPlatform.isLinux [ pkgs.pkg-config ];
+            buildInputs = lib.optionals pkgs.stdenv.hostPlatform.isLinux [ pkgs.dbus ];
           };
 
           # Dependencies only depend on Cargo.toml/Cargo.lock, so source edits

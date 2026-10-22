@@ -7,8 +7,7 @@ mod theme;
 mod widgets;
 
 #[tokio::main]
-async fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?;
+async fn main() -> anyhow::Result<()> {
     if let Some(path) = logging::init() {
         tracing::info!(path = %path.display(), "starting stravacz-tui");
     }

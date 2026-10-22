@@ -23,6 +23,9 @@ browser.
 cargo run -p stravacz-tui    # or: nix run
 ```
 
+Building outside Nix on Linux needs `pkg-config` and the libdbus headers
+(`libdbus-1-dev` / `dbus-devel`) for the keyring.
+
 Log in with your canteen number, username and password. With *Remember password*
 checked, the password goes to the system keyring (Secret Service / Keychain /
 Credential Manager) and you are logged in automatically next time; the canteen
