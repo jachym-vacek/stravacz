@@ -225,12 +225,20 @@ impl App {
         let Screen::Menu(screen) = &self.screen else {
             return None;
         };
-        if self.busy.is_some() {
-            self.toast = Some(Toast::info("Hold on, still working…"));
+        let session = screen.session().clone();
+        if self.refuse_while_busy() {
             return None;
         }
         self.busy = Some(label);
-        Some(screen.session().clone())
+        Some(session)
+    }
+
+    /// Tell the user to wait if something is running; returns whether it is.
+    fn refuse_while_busy(&mut self) -> bool {
+        if self.busy.is_some() {
+            self.toast = Some(Toast::info("Hold on, still working…"));
+        }
+        self.busy.is_some()
     }
 
     fn spawn(&self, task: impl Future<Output = Msg> + Send + 'static) {
@@ -309,6 +317,10 @@ impl App {
     }
 
     fn logout(&mut self) {
+        // Logging out mid-request would race it, e.g. half-apply a submission.
+        if self.refuse_while_busy() {
+            return;
+        }
         let Screen::Menu(screen) = &self.screen else {
             return;
         };
@@ -513,5 +525,21 @@ mod tests {
         harness.settle().await;
         assert!(harness.menu().draft().is_empty());
         assert_eq!(harness.toast(), "Order saved.");
+    }
+
+    #[tokio::test]
+    async fn logout_waits_for_a_running_save() {
+        let mut harness = Harness::logged_in("logout").await;
+        harness.pick_lunch();
+        harness.press(KeyCode::Char('s'));
+
+        harness.press(KeyCode::Char('L'));
+        assert!(matches!(harness.app.screen, Screen::Menu(_)));
+        assert_eq!(harness.toast(), "Hold on, still working…");
+
+        harness.settle().await;
+        assert!(harness.menu().draft().is_empty(), "the save went through");
+        harness.press(KeyCode::Char('L'));
+        assert!(matches!(harness.app.screen, Screen::Login(_)));
     }
 }
