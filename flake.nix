@@ -18,20 +18,22 @@
         pkgs = nixpkgs.legacyPackages.${system};
         inherit (pkgs) lib;
         workspace = (lib.importTOML ./Cargo.toml).workspace.package;
+        src = lib.fileset.toSource {
+          root = ./.;
+          fileset = lib.fileset.unions [
+            ./Cargo.toml
+            ./Cargo.lock
+            ./crates
+          ];
+        };
+        package = self.packages.${system}.default;
       in
       {
         packages.default = pkgs.rustPlatform.buildRustPackage {
           pname = "stravacz";
           inherit (workspace) version;
 
-          src = lib.fileset.toSource {
-            root = ./.;
-            fileset = lib.fileset.unions [
-              ./Cargo.toml
-              ./Cargo.lock
-              ./crates
-            ];
-          };
+          inherit src;
           cargoLock.lockFile = ./Cargo.lock;
 
           # aws-lc-rs (rustls' crypto provider) is built from C sources.
@@ -46,10 +48,45 @@
           };
         };
 
-        apps.default = flake-utils.lib.mkApp { drv = self.packages.${system}.default; };
+        apps.default = flake-utils.lib.mkApp { drv = package; };
+
+        # `nix flake check`: build and test, clippy, and formatting.
+        checks = {
+          # The package's check phase runs `cargo test`.
+          default = package;
+
+          clippy = package.overrideAttrs (old: {
+            pname = "stravacz-clippy";
+            nativeBuildInputs = old.nativeBuildInputs ++ [ pkgs.clippy ];
+            buildPhase = ''
+              runHook preBuild
+              cargo clippy --offline --frozen --all-targets --examples -- --deny warnings
+              runHook postBuild
+            '';
+            doCheck = false;
+            installPhase = "touch $out";
+            dontFixup = true;
+          });
+
+          fmt =
+            pkgs.runCommand "stravacz-fmt"
+              {
+                nativeBuildInputs = [
+                  pkgs.cargo
+                  pkgs.rustfmt
+                  pkgs.nixfmt
+                ];
+              }
+              ''
+                cd ${src}
+                cargo fmt --all --check
+                nixfmt --check ${./flake.nix}
+                touch $out
+              '';
+        };
 
         devShells.default = pkgs.mkShell {
-          inputsFrom = [ self.packages.${system}.default ];
+          inputsFrom = [ package ];
           packages = with pkgs; [
             cargo
             rustc
@@ -60,7 +97,7 @@
           RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
         };
 
-        formatter = pkgs.nixfmt-rfc-style;
+        formatter = pkgs.nixfmt;
       }
     );
 }
