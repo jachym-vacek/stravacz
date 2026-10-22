@@ -32,7 +32,8 @@ number and username are stored in `~/.config/stravacz/config.toml`.
 
 Changes are staged locally first (shown in yellow) and sent together with `s`,
 which mirrors how the web app works. Picking a different lunch on a day that
-already has one swaps them.
+already has one swaps them. If the session expires, pending changes survive
+logging back in (which happens automatically with a remembered password).
 
 Logs go to `~/.local/share/stravacz/stravacz.log`; set `STRAVACZ_LOG=debug`
 for more detail.
@@ -50,7 +51,9 @@ $ stravacz logout                # forget the account and its password
 ```
 
 Every command takes `--json` for scripting. Without a keyring (cron, CI), pass the
-account through `STRAVA_CANTEEN`, `STRAVA_USERNAME` and `STRAVA_PASSWORD`.
+account through `STRAVA_CANTEEN`, `STRAVA_USERNAME` and `STRAVA_PASSWORD`. Keep in
+mind that environment variables are readable by other processes of the same user
+(e.g. via `/proc/<pid>/environ`), so prefer the keyring where there is one.
 Shell completions: `stravacz completions zsh > _stravacz` (also bash, fish, …).
 
 The CLI and the TUI share the remembered account.
@@ -69,16 +72,25 @@ re-exports `stravacz-api` as `stravacz_core::api`.
 
 ## Development
 
+The toolchain comes from the Nix flake. Enter it with `nix develop` (or direnv),
+or prefix single commands with `nix develop --command`:
+
 ```sh
-nix develop                                       # toolchain + rust-analyzer
-cargo test
-cargo clippy --all-targets
+nix develop --command cargo test
+nix develop --command cargo clippy --all-targets --examples
+nix flake check          # what CI runs: build + tests, clippy, formatting
 
 # A fake Strava.cz to click through without a real account:
-cargo run -p stravacz-api --example mock_server
-STRAVA_BASE_URL=http://127.0.0.1:8555 cargo run -p stravacz-tui
-STRAVA_BASE_URL=http://127.0.0.1:8555 cargo run -p stravacz-cli -- menu
+nix develop --command cargo run -p stravacz-api --example mock_server
+STRAVA_BASE_URL=http://127.0.0.1:8555 nix develop --command cargo run -p stravacz-tui
+STRAVA_BASE_URL=http://127.0.0.1:8555 nix develop --command cargo run -p stravacz-cli -- menu
 ```
+
+The same fake canteen is available to tests as `stravacz_api::mock` (feature `mock`).
 
 The API was reverse engineered from the web app, with help from
 [strava-cz-python](https://github.com/jsem-nerad/strava-cz-python).
+
+## License
+
+[MIT](LICENSE)
