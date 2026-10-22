@@ -24,5 +24,10 @@ stravacz-core.workspace = true
 tokio.workspace = true
 unicode-width.workspace = true
 
+[dev-dependencies]
+serde_json.workspace = true
+stravacz-api = { workspace = true, features = ["mock"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
 [lints]
 workspace = true

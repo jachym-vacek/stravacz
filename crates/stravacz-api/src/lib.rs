@@ -25,6 +25,9 @@ mod error;
 mod model;
 mod raw;
 
+#[cfg(feature = "mock")]
+pub mod mock;
+
 pub use client::{Client, Credentials, DEFAULT_BASE_URL, Session, Submission};
 pub use error::{Error, Result};
 pub use model::{

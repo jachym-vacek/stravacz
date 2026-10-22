@@ -6,6 +6,10 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[features]
+# A fake Strava.cz (`stravacz_api::mock`) for tests and the `mock_server` example.
+mock = ["dep:wiremock"]
+
 [dependencies]
 chrono.workspace = true
 reqwest.workspace = true
@@ -13,8 +17,11 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+wiremock = { workspace = true, optional = true }
 
 [dev-dependencies]
+# Turns on the mock for the example without having to pass `--features mock`.
+stravacz-api = { path = ".", features = ["mock"] }
 tokio = { workspace = true, features = ["signal"] }
 wiremock.workspace = true
 
