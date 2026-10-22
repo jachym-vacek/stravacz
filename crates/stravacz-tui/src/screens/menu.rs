@@ -23,6 +23,8 @@ pub struct MenuScreen {
     menu: Menu,
     draft: OrderDraft,
     balance: Money,
+    /// Whether `balance` is worked out locally rather than reported by the canteen.
+    balance_estimated: bool,
     days: ListState,
     meals: ListState,
 }
@@ -31,6 +33,7 @@ impl MenuScreen {
     pub fn new(session: Session, menu: Menu) -> Self {
         let mut screen = Self {
             balance: session.account().balance,
+            balance_estimated: false,
             session,
             menu,
             draft: OrderDraft::new(),
@@ -81,8 +84,27 @@ impl MenuScreen {
     /// Take over the result of a submission and describe it.
     pub fn finish_submit(&mut self, submission: Submission) -> Toast {
         let requested = self.draft.len();
-        if let Some(balance) = submission.balance {
-            self.balance = balance;
+        let spent: Money = self
+            .draft
+            .changes()
+            .into_iter()
+            .filter(|change| !submission.rejected.contains(&change.meal))
+            .filter_map(|change| {
+                let price = self.menu.meal(change.meal)?.price;
+                Some(if change.ordered { price } else { -price })
+            })
+            .sum();
+        match submission.balance {
+            Some(balance) => {
+                self.balance = balance;
+                self.balance_estimated = false;
+            }
+            // Not every canteen reports the new balance.
+            None if !spent.is_zero() => {
+                self.balance = self.balance - spent;
+                self.balance_estimated = true;
+            }
+            None => {}
         }
         let Some(menu) = submission.menu else {
             // Saved, so nothing is pending anymore; we just can't show the result.
@@ -251,7 +273,12 @@ impl MenuScreen {
             Line::from(vec![
                 Span::styled(format!("{}  ", account.full_name), theme::muted()),
                 Span::styled(
-                    format!(" {} {} ", self.balance, account.currency),
+                    format!(
+                        " {}{} {} ",
+                        if self.balance_estimated { "≈ " } else { "" },
+                        self.balance,
+                        account.currency
+                    ),
                     Style::new().fg(theme::BASE).bg(theme::GREEN).bold(),
                 ),
             ])
@@ -619,6 +646,37 @@ mod tests {
 
         assert_eq!(screen.draft.changes(), [api::Change::order(lunches[1])]);
         assert!(toast.message().contains("1 of them"), "{}", toast.message());
+    }
+
+    #[tokio::test]
+    async fn balance_is_estimated_when_the_canteen_does_not_report_it() {
+        let (_server, mut screen) = screen().await;
+        let start = screen.balance;
+        let lunches = open_lunches(&screen.menu, 2);
+        let price = screen.menu.meal(lunches[0]).unwrap().price;
+        for &id in &lunches {
+            screen.draft.toggle(&screen.menu, id).unwrap();
+        }
+
+        let menu = edited(&screen.menu, |meal| {
+            meal.ordered |= meal.id == lunches[0];
+        });
+        screen.finish_submit(Submission {
+            menu: Some(menu.clone()),
+            balance: None,
+            rejected: vec![lunches[1]],
+        });
+        assert_eq!(screen.balance, start - price);
+        assert!(screen.balance_estimated);
+
+        let reported = Money::from_hundredths(12_345);
+        screen.finish_submit(Submission {
+            menu: Some(menu),
+            balance: Some(reported),
+            rejected: Vec::new(),
+        });
+        assert_eq!(screen.balance, reported);
+        assert!(!screen.balance_estimated);
     }
 
     #[tokio::test]
