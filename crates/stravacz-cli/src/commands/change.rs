@@ -82,11 +82,17 @@ async fn apply(
     }
 
     let submission = session.submit(&changes).await?;
-    let applied = |id: &MealId| !submission.rejected.contains(id);
+    // Unknown (`null`) when the menu could not be reloaded to check.
+    let applied = |id: &MealId| {
+        submission
+            .is_verified()
+            .then(|| !submission.rejected.contains(id))
+    };
 
     if json {
         print_json(&json!({
             "dry_run": false,
+            "verified": submission.is_verified(),
             "changes": changes
                 .iter()
                 .map(|change| json!({
@@ -103,6 +109,12 @@ async fn apply(
         if saved > 0 {
             let plural = if saved == 1 { "" } else { "s" };
             anstream::println!("{OK}✓{OK:#} Saved {saved} change{plural}.");
+        }
+        if !submission.is_verified() {
+            anstream::eprintln!(
+                "{WARN}warning:{WARN:#} could not reload the menu to check the changes; \
+                 see `stravacz menu`"
+            );
         }
         if !submission.rejected.is_empty() {
             let ids: Vec<String> = submission.rejected.iter().map(MealId::to_string).collect();

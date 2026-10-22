@@ -70,7 +70,14 @@ impl MenuScreen {
         if let Some(balance) = submission.balance {
             self.balance = balance;
         }
-        self.set_menu(submission.menu);
+        let Some(menu) = submission.menu else {
+            // Saved, so nothing is pending anymore; we just can't show the result.
+            self.draft.clear();
+            return Toast::warning(
+                "Saved, but the menu couldn't be reloaded to check it. Press r to refresh.",
+            );
+        };
+        self.set_menu(menu);
 
         let rejected = submission.rejected.len();
         if rejected == 0 {

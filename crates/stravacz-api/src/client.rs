@@ -218,12 +218,22 @@ struct SessionInner {
 /// The outcome of [`Session::submit`].
 #[derive(Debug, Clone)]
 pub struct Submission {
-    /// The menu as the canteen sees it after the submission.
-    pub menu: Menu,
+    /// The menu as the canteen sees it after the submission, or `None` if the
+    /// changes were saved but the menu could not be reloaded to check them.
+    pub menu: Option<Menu>,
     /// The balance reported by the canteen, if it sent one.
     pub balance: Option<Money>,
-    /// Changes the canteen accepted but did not apply.
+    /// Changes the canteen accepted but did not apply. Always empty when the
+    /// menu could not be reloaded.
     pub rejected: Vec<MealId>,
+}
+
+impl Submission {
+    /// Whether the changes were checked against a fresh menu.
+    #[must_use]
+    pub fn is_verified(&self) -> bool {
+        self.menu.is_some()
+    }
 }
 
 impl Session {
@@ -263,7 +273,9 @@ impl Session {
 
     /// Apply all `changes` in one transaction and verify them against a fresh menu.
     ///
-    /// If any step fails, the staged changes are discarded on the server.
+    /// If staging or saving fails, the staged changes are discarded on the
+    /// server and an error is returned. Once saved, the changes stand: failing
+    /// to reload the menu afterwards yields an unverified [`Submission`].
     pub async fn submit(&self, changes: &[Change]) -> Result<Submission> {
         let balance = if changes.is_empty() {
             None
@@ -279,7 +291,17 @@ impl Session {
             }
         };
 
-        let menu = self.menu().await?;
+        let menu = match self.menu().await {
+            Ok(menu) => menu,
+            Err(err) => {
+                tracing::warn!(%err, "changes saved, but the menu could not be reloaded");
+                return Ok(Submission {
+                    menu: None,
+                    balance,
+                    rejected: Vec::new(),
+                });
+            }
+        };
         let rejected = changes
             .iter()
             .filter(|change| {
@@ -290,7 +312,7 @@ impl Session {
             .collect();
 
         Ok(Submission {
-            menu,
+            menu: Some(menu),
             balance,
             rejected,
         })

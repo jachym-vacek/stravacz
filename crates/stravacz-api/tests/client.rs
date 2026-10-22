@@ -138,6 +138,33 @@ async fn submit_stages_saves_and_verifies() {
 }
 
 #[tokio::test]
+async fn submit_saved_but_not_reloaded_is_unverified() {
+    let (server, session) = logged_in().await;
+    Mock::given(path("/api/pridejJidloS5"))
+        .respond_with(ok(json!({})))
+        .mount(&server)
+        .await;
+    Mock::given(path("/api/saveOrders"))
+        .respond_with(ok(json!({ "konto": "460.00" })))
+        .mount(&server)
+        .await;
+    Mock::given(path("/api/objednavky"))
+        .respond_with(ResponseTemplate::new(502))
+        .mount(&server)
+        .await;
+    Mock::given(path("/api/nactiVlastnostiPA"))
+        .respond_with(ok(json!({})))
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    let submission = session.submit(&[Change::order(MealId(88))]).await.unwrap();
+    assert!(!submission.is_verified());
+    assert_eq!(submission.balance, Some(Money::from_hundredths(46_000)));
+    assert_eq!(submission.rejected, []);
+}
+
+#[tokio::test]
 async fn failed_submit_discards_staged_changes() {
     let (server, session) = logged_in().await;
     Mock::given(path("/api/pridejJidloS5"))
