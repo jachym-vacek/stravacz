@@ -2,6 +2,8 @@ use std::collections::BTreeMap;
 
 use stravacz_api::{Change, Meal, MealId, MealKind, Menu, Money};
 
+use crate::wording::restriction_reason;
+
 /// Order changes the user has picked but not submitted yet.
 ///
 /// The draft enforces the canteen's rules locally, so the user gets immediate
@@ -50,9 +52,13 @@ impl OrderDraft {
         let ordered = !self.is_ordered(meal);
         if !meal.can_set(ordered) {
             return Err(if ordered {
-                ToggleError::CannotOrder(meal.order_restriction.reason().unwrap_or_default())
+                ToggleError::CannotOrder(
+                    restriction_reason(&meal.order_restriction).unwrap_or_default(),
+                )
             } else {
-                ToggleError::CannotCancel(meal.cancel_restriction.reason().unwrap_or_default())
+                ToggleError::CannotCancel(
+                    restriction_reason(&meal.cancel_restriction).unwrap_or_default(),
+                )
             });
         }
 

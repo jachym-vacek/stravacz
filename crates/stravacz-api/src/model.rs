@@ -175,18 +175,6 @@ impl Restriction {
     pub fn is_allowed(&self) -> bool {
         *self == Self::None
     }
-
-    /// A human readable reason, or `None` if the action is allowed.
-    #[must_use]
-    pub fn reason(&self) -> Option<&'static str> {
-        match self {
-            Self::None => None,
-            Self::Closed => Some("the deadline has passed"),
-            Self::NotSeparately => Some("it cannot be ordered separately"),
-            Self::NoService => Some("the canteen is closed that day"),
-            Self::Other(_) => Some("the canteen does not allow it"),
-        }
-    }
 }
 
 /// What the canteen says about a whole day.

@@ -7,9 +7,8 @@ use ratatui::symbols::border;
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, List, ListItem, ListState, Padding, Paragraph, Wrap};
 use stravacz_core::OrderDraft;
-use stravacz_core::api::{
-    Day, DayStatus, Meal, MealKind, Menu, Money, Restriction, Session, Submission,
-};
+use stravacz_core::api::{Day, Meal, MealKind, Menu, Money, Session, Submission};
+use stravacz_core::wording::{day_note, meal_note};
 
 use crate::app::Action;
 use crate::theme;
@@ -339,28 +338,33 @@ impl MenuScreen {
         let pending = self.draft.changes_meal(meal.id);
         let ordered = self.draft.is_ordered(meal);
 
-        let (icon, icon_style, tag, tag_style) = match (ordered, pending) {
-            (true, true) => (
+        let (icon, icon_style, tag, tag_style) = match (ordered, pending, meal_note(meal)) {
+            (true, true, _) => (
                 "+",
                 theme::YELLOW,
-                "will order",
+                "will order".to_owned(),
                 Style::new().fg(theme::YELLOW),
             ),
-            (false, true) => ("−", theme::RED, "will cancel", Style::new().fg(theme::RED)),
-            (true, false) if !meal.can_cancel() => {
-                ("✓", theme::GREEN, "ordered · locked", theme::faint())
-            }
-            (true, false) => ("✓", theme::GREEN, "ordered", Style::new().fg(theme::GREEN)),
-            (false, false) => match &meal.order_restriction {
-                Restriction::None => ("○", theme::SUBTEXT, "", theme::faint()),
-                Restriction::NotSeparately => {
-                    ("·", theme::OVERLAY, "comes with lunch", theme::faint())
-                }
-                Restriction::Closed => ("·", theme::OVERLAY, "closed", theme::faint()),
-                Restriction::NoService | Restriction::Other(_) => {
-                    ("·", theme::OVERLAY, "unavailable", theme::faint())
-                }
-            },
+            (false, true, _) => (
+                "−",
+                theme::RED,
+                "will cancel".to_owned(),
+                Style::new().fg(theme::RED),
+            ),
+            (true, false, Some(note)) => (
+                "✓",
+                theme::GREEN,
+                format!("ordered · {note}"),
+                theme::faint(),
+            ),
+            (true, false, None) => (
+                "✓",
+                theme::GREEN,
+                "ordered".to_owned(),
+                Style::new().fg(theme::GREEN),
+            ),
+            (false, false, Some(note)) => ("·", theme::OVERLAY, note.to_owned(), theme::faint()),
+            (false, false, None) => ("○", theme::SUBTEXT, String::new(), theme::faint()),
         };
 
         let label_color = match meal.kind {
@@ -507,15 +511,6 @@ fn panel(title: &str) -> Block<'static> {
         .border_set(border::ROUNDED)
         .border_style(theme::border())
         .title(Span::styled(format!(" {title} "), theme::title()))
-}
-
-fn day_note(status: &DayStatus) -> Option<&'static str> {
-    match status {
-        DayStatus::Normal | DayStatus::Other(_) => None,
-        DayStatus::NotAutoOrdered => Some("not ordered automatically"),
-        DayStatus::NoService => Some("no service"),
-        DayStatus::Closed => Some("ordering closed"),
-    }
 }
 
 /// Greedy word wrap; long words are left to overflow.

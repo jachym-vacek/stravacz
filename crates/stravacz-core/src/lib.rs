@@ -8,6 +8,7 @@ mod config;
 mod draft;
 mod login;
 pub mod secrets;
+pub mod wording;
 
 pub use config::{Config, ConfigError, ConfigStore, SavedLogin, project_dirs};
 pub use draft::{OrderDraft, ToggleError};

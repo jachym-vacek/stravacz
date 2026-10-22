@@ -5,7 +5,8 @@ use anstyle::Style;
 use anyhow::Result;
 use chrono::Local;
 use serde_json::json;
-use stravacz_core::api::{Day, DayStatus, Meal, Restriction};
+use stravacz_core::api::{Day, Meal};
+use stravacz_core::wording::{day_note, meal_note};
 
 use super::{print, print_json};
 use crate::auth;
@@ -121,7 +122,7 @@ impl<'a> Table<'a> {
         let (id, id_width) = (meal.id, self.id);
         let (label, label_width) = (&meal.label, self.label);
 
-        let tag = tag(meal);
+        let tag = meal_note(meal).unwrap_or_default();
 
         let mut row = format!(
             "  {icon_style}{icon}{icon_style:#} {ID}{id:>id_width$}{ID:#}  \
@@ -135,25 +136,5 @@ impl<'a> Table<'a> {
             let _ = write!(row, "  {DIM}{tag}{DIM:#}");
         }
         row
-    }
-}
-
-/// Why a meal cannot be changed, if that is worth pointing out.
-fn tag(meal: &Meal) -> &'static str {
-    match (meal.ordered, &meal.order_restriction) {
-        (true, _) if !meal.can_cancel() => "locked",
-        (true, _) | (false, Restriction::None) => "",
-        (false, Restriction::NotSeparately) => "with lunch",
-        (false, Restriction::Closed) => "closed",
-        (false, Restriction::NoService | Restriction::Other(_)) => "unavailable",
-    }
-}
-
-fn day_note(status: &DayStatus) -> Option<&'static str> {
-    match status {
-        DayStatus::Normal | DayStatus::Other(_) => None,
-        DayStatus::NotAutoOrdered => Some("not ordered automatically"),
-        DayStatus::NoService => Some("no service"),
-        DayStatus::Closed => Some("ordering closed"),
     }
 }
