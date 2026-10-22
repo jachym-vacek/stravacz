@@ -59,6 +59,24 @@ enum Overlay {
     ConfirmQuit,
 }
 
+/// Work running in the background.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Task {
+    SigningIn,
+    Refreshing,
+    Saving,
+}
+
+impl Task {
+    fn label(self) -> &'static str {
+        match self {
+            Self::SigningIn => "Signing in…",
+            Self::Refreshing => "Refreshing…",
+            Self::Saving => "Saving orders…",
+        }
+    }
+}
+
 /// Run the UI until the user quits.
 pub async fn run(mut terminal: DefaultTerminal) -> Result<()> {
     let (tx, mut rx) = mpsc::unbounded_channel();
@@ -95,7 +113,7 @@ struct App {
     overlay: Overlay,
     toast: Option<Toast>,
     /// What is running in the background, if anything.
-    busy: Option<&'static str>,
+    busy: Option<Task>,
     tick: usize,
     tx: UnboundedSender<Msg>,
     running: bool,
@@ -133,7 +151,7 @@ impl App {
         let area = frame.area();
         let busy = self
             .busy
-            .map(|label| format!("{} {label}", SPINNER[self.tick % SPINNER.len()]));
+            .map(|task| format!("{} {}", SPINNER[self.tick % SPINNER.len()], task.label()));
 
         match &mut self.screen {
             Screen::Login(screen) => screen.render(frame, area, busy.as_deref()),
@@ -168,7 +186,13 @@ impl App {
 
     fn on_key(&mut self, key: KeyEvent) {
         if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
-            self.running = false;
+            // Like `q`, but a second ctrl-c confirms quitting with pending changes.
+            if self.overlay == Overlay::ConfirmQuit {
+                self.running = false;
+            } else {
+                self.overlay = Overlay::None;
+                self.perform(Action::Quit);
+            }
             return;
         }
 
@@ -198,6 +222,10 @@ impl App {
 
     fn perform(&mut self, action: Action) {
         match action {
+            // Quitting mid-save would skip discarding half-staged orders.
+            Action::Quit if self.busy == Some(Task::Saving) => {
+                self.toast = Some(Toast::info("Saving orders, quit once it's done…"));
+            }
             Action::Quit => match &self.screen {
                 Screen::Menu(screen) if !screen.draft().is_empty() => {
                     self.overlay = Overlay::ConfirmQuit;
@@ -211,7 +239,7 @@ impl App {
                 remember,
             } => self.login(credentials, remember),
             Action::Refresh => {
-                if let Some(session) = self.start("Refreshing…") {
+                if let Some(session) = self.start(Task::Refreshing) {
                     self.spawn(async move { Msg::Refreshed(session.menu().await) });
                 }
             }
@@ -221,7 +249,7 @@ impl App {
     }
 
     /// Mark the app busy and hand out the session, unless something is running.
-    fn start(&mut self, label: &'static str) -> Option<Session> {
+    fn start(&mut self, task: Task) -> Option<Session> {
         let Screen::Menu(screen) = &self.screen else {
             return None;
         };
@@ -229,7 +257,7 @@ impl App {
         if self.refuse_while_busy() {
             return None;
         }
-        self.busy = Some(label);
+        self.busy = Some(task);
         Some(session)
     }
 
@@ -258,7 +286,7 @@ impl App {
             return;
         };
 
-        self.busy = Some("Signing in…");
+        self.busy = Some(Task::SigningIn);
         let tx = self.tx.clone();
         tokio::task::spawn_blocking(move || {
             let _ = tx.send(Msg::StoredPassword(secrets::load_password(&saved)));
@@ -269,7 +297,7 @@ impl App {
         if self.busy.is_some() {
             return;
         }
-        self.busy = Some("Signing in…");
+        self.busy = Some(Task::SigningIn);
 
         let client = self.client.clone();
         let config = self.config.clone();
@@ -311,7 +339,7 @@ impl App {
             self.toast = Some(Toast::info("Nothing to save."));
             return;
         }
-        if let Some(session) = self.start("Saving orders…") {
+        if let Some(session) = self.start(Task::Saving) {
             self.spawn(async move { Msg::Submitted(session.submit(&changes).await) });
         }
     }
@@ -541,5 +569,36 @@ mod tests {
         assert!(harness.menu().draft().is_empty(), "the save went through");
         harness.press(KeyCode::Char('L'));
         assert!(matches!(harness.app.screen, Screen::Login(_)));
+    }
+
+    #[tokio::test]
+    async fn ctrl_c_waits_for_a_running_save() {
+        let ctrl_c = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
+        let mut harness = Harness::logged_in("ctrl-c-save").await;
+        harness.pick_lunch();
+        harness.press(KeyCode::Char('s'));
+
+        harness.app.on_key(ctrl_c);
+        harness.press(KeyCode::Char('q'));
+        assert!(harness.app.running);
+        assert_eq!(harness.app.overlay, Overlay::None);
+
+        harness.settle().await;
+        harness.app.on_key(ctrl_c);
+        assert!(!harness.app.running);
+    }
+
+    #[tokio::test]
+    async fn ctrl_c_asks_before_dropping_pending_changes() {
+        let ctrl_c = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
+        let mut harness = Harness::logged_in("ctrl-c-pending").await;
+        harness.pick_lunch();
+
+        harness.app.on_key(ctrl_c);
+        assert!(harness.app.running);
+        assert_eq!(harness.app.overlay, Overlay::ConfirmQuit);
+
+        harness.app.on_key(ctrl_c);
+        assert!(!harness.app.running);
     }
 }
