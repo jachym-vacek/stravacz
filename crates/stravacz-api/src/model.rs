@@ -41,15 +41,24 @@ impl Money {
     }
 
     /// Parse amounts as the API sends them: `"512.50"`, `"50"`, `"-3,5"`.
+    ///
+    /// A leading `+` and spaces as thousands separators (`"1 234,50"`) are
+    /// accepted too.
     #[must_use]
     pub fn parse(text: &str) -> Option<Self> {
-        let text = text.trim();
+        let text: String = text.chars().filter(|c| !c.is_whitespace()).collect();
         let (negative, digits) = match text.strip_prefix('-') {
             Some(rest) => (true, rest),
-            None => (false, text),
+            None => (false, text.strip_prefix('+').unwrap_or(&text)),
         };
         let (whole, fraction) = digits.split_once(['.', ',']).unwrap_or((digits, ""));
         if whole.is_empty() && fraction.is_empty() {
+            return None;
+        }
+        if ![whole, fraction]
+            .iter()
+            .all(|part| part.chars().all(|c| c.is_ascii_digit()))
+        {
             return None;
         }
         let whole: i64 = if whole.is_empty() {
@@ -57,9 +66,6 @@ impl Money {
         } else {
             whole.parse().ok()?
         };
-        if !fraction.chars().all(|c| c.is_ascii_digit()) {
-            return None;
-        }
         // Only the first two decimals matter; pad "5" to "50".
         let cents: i64 = format!("{fraction:0<2}")[..2].parse().ok()?;
         let value = whole.checked_mul(100)?.checked_add(cents)?;
@@ -349,6 +355,11 @@ mod tests {
         assert_eq!(Money::parse("-3,5"), Some(Money(-350)));
         assert_eq!(Money::parse(" 0 "), Some(Money::ZERO));
         assert_eq!(Money::parse("1.999"), Some(Money(199)));
+        assert_eq!(Money::parse("1 234,50"), Some(Money(123_450)));
+        assert_eq!(Money::parse("1\u{a0}234"), Some(Money(123_400)));
+        assert_eq!(Money::parse("+5"), Some(Money(500)));
+        assert_eq!(Money::parse("--5"), None);
+        assert_eq!(Money::parse("+-5"), None);
         assert_eq!(Money::parse(""), None);
         assert_eq!(Money::parse("abc"), None);
     }

@@ -46,7 +46,7 @@ impl RawAccount {
             email: non_empty(&self.email),
             canteen_number: canteen_number.to_owned(),
             canteen_name: non_empty(&self.canteen_name),
-            balance: Money::parse(&self.konto).unwrap_or_default(),
+            balance: amount("konto", &self.konto),
             currency: non_empty(&self.mena).unwrap_or_else(|| "Kč".to_owned()),
         }
     }
@@ -148,7 +148,7 @@ impl RawMeal {
             kind: meal_kind(&self.druh, &self.druh_popis),
             name: self.nazev.trim().to_owned(),
             label: self.druh_popis.trim().to_owned(),
-            price: Money::parse(&self.cena).unwrap_or_default(),
+            price: amount("cena", &self.cena),
             ordered: self
                 .pocet
                 .trim()
@@ -164,11 +164,16 @@ impl RawMeal {
 
 /// The balance that write endpoints report back in `konto`, if any.
 pub(crate) fn balance(response: &Value) -> Option<Money> {
-    match response.get("konto")? {
-        Value::String(text) => Money::parse(text),
-        Value::Number(number) => Money::parse(&number.to_string()),
-        _ => None,
+    let text = match response.get("konto")? {
+        Value::String(text) => text.clone(),
+        Value::Number(number) => number.to_string(),
+        _ => return None,
+    };
+    let balance = Money::parse(&text);
+    if balance.is_none() && !text.trim().is_empty() {
+        tracing::warn!(konto = text, "unreadable balance");
     }
+    balance
 }
 
 /// Dates come as `15.09.2026`; the separator varies between versions.
@@ -236,6 +241,17 @@ fn is_placeholder(name: &str, label: &str) -> bool {
     let mut words = name.split_whitespace();
     words.next().is_some_and(|first| GENERIC.contains(&first))
         && words.all(|word| word == "rad" || word.chars().all(|c| c.is_ascii_digit()))
+}
+
+/// An amount that may be missing (zero), but should never be garbled.
+fn amount(field: &'static str, text: &str) -> Money {
+    if text.trim().is_empty() {
+        return Money::ZERO;
+    }
+    Money::parse(text).unwrap_or_else(|| {
+        tracing::warn!(field, text, "unreadable amount, using 0");
+        Money::ZERO
+    })
 }
 
 fn non_empty(text: &str) -> Option<String> {
