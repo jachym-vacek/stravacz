@@ -54,6 +54,11 @@ impl Toast {
         Self::new(Level::Error, message)
     }
 
+    #[cfg(test)]
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
     #[must_use]
     pub fn is_expired(&self) -> bool {
         Instant::now() >= self.expires

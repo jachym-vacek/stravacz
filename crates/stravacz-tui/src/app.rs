@@ -103,17 +103,21 @@ struct App {
 
 impl App {
     fn new(tx: UnboundedSender<Msg>) -> Result<Self> {
-        let config = ConfigStore::new()?;
+        let client = match std::env::var("STRAVA_BASE_URL") {
+            Ok(url) => Client::with_base_url(&url)?,
+            Err(_) => Client::new()?,
+        };
+        Ok(Self::with(client, ConfigStore::new()?, tx))
+    }
+
+    fn with(client: Client, config: ConfigStore, tx: UnboundedSender<Msg>) -> Self {
         let (saved, toast) = match config.load() {
             Ok(loaded) => (loaded.login, None),
             Err(err) => (None, Some(Toast::error(err.to_string()))),
         };
 
-        Ok(Self {
-            client: match std::env::var("STRAVA_BASE_URL") {
-                Ok(url) => Client::with_base_url(&url)?,
-                Err(_) => Client::new()?,
-            },
+        Self {
+            client,
             config,
             screen: Screen::Login(LoginScreen::new(saved.as_ref())),
             overlay: Overlay::None,
@@ -122,7 +126,7 @@ impl App {
             tick: 0,
             tx,
             running: true,
-        })
+        }
     }
 
     fn draw(&mut self, frame: &mut Frame) {
@@ -396,5 +400,118 @@ impl App {
         } else {
             self.toast = Some(Toast::error(err.to_string()));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use stravacz_core::api::mock;
+    use tokio::sync::mpsc::UnboundedReceiver;
+    use wiremock::MockServer;
+
+    use super::*;
+
+    /// An app talking to the mock canteen, with its own config file.
+    struct Harness {
+        app: App,
+        rx: UnboundedReceiver<Msg>,
+        _server: MockServer,
+        dir: PathBuf,
+    }
+
+    impl Harness {
+        async fn new(name: &str) -> Self {
+            let server = mock::start().await;
+            let dir = std::env::temp_dir()
+                .join(format!("stravacz-tui-test-{}-{name}", std::process::id()));
+            let (tx, rx) = mpsc::unbounded_channel();
+            let client = Client::with_base_url(&server.uri()).unwrap();
+            let app = App::with(client, ConfigStore::at(dir.join("config.toml")), tx);
+            Self {
+                app,
+                rx,
+                _server: server,
+                dir,
+            }
+        }
+
+        /// Log in without touching the keyring.
+        async fn logged_in(name: &str) -> Self {
+            let mut harness = Self::new(name).await;
+            harness.login("jan.novak").await;
+            harness
+        }
+
+        async fn login(&mut self, username: &str) {
+            self.app.perform(Action::Login {
+                credentials: Credentials::new("1234", username, "secret"),
+                remember: false,
+            });
+            self.settle().await;
+            assert!(matches!(self.app.screen, Screen::Menu(_)), "logged in");
+        }
+
+        /// Handle background results until nothing is running.
+        async fn settle(&mut self) {
+            while self.app.busy.is_some() {
+                let msg = tokio::time::timeout(Duration::from_secs(5), self.rx.recv())
+                    .await
+                    .expect("a background task finishes")
+                    .expect("the channel is open");
+                self.app.on_message(msg);
+            }
+        }
+
+        fn press(&mut self, code: KeyCode) {
+            self.app.on_key(KeyEvent::new(code, KeyModifiers::NONE));
+        }
+
+        fn menu(&self) -> &MenuScreen {
+            match &self.app.screen {
+                Screen::Menu(screen) => screen,
+                Screen::Login(_) => panic!("not on the menu screen"),
+            }
+        }
+
+        /// Stage ordering a lunch on the next day that allows it.
+        fn pick_lunch(&mut self) {
+            for _ in 0..10 {
+                self.press(KeyCode::Char('l'));
+                self.press(KeyCode::Char('j'));
+                self.press(KeyCode::Char(' '));
+                if !self.menu().draft().is_empty() {
+                    return;
+                }
+            }
+            panic!("no orderable lunch on the mock menu");
+        }
+
+        fn toast(&self) -> &str {
+            self.app.toast.as_ref().map_or("", Toast::message)
+        }
+    }
+
+    impl Drop for Harness {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
+    }
+
+    #[tokio::test]
+    async fn login_shows_the_menu() {
+        let mut harness = Harness::logged_in("login").await;
+        assert!(
+            harness.toast().starts_with("Welcome"),
+            "{}",
+            harness.toast()
+        );
+
+        harness.pick_lunch();
+        harness.press(KeyCode::Char('s'));
+        harness.settle().await;
+        assert!(harness.menu().draft().is_empty());
+        assert_eq!(harness.toast(), "Order saved.");
     }
 }

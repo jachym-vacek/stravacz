@@ -3293,10 +3293,12 @@ dependencies = [
  "crossterm",
  "futures",
  "ratatui",
+ "stravacz-api",
  "stravacz-core",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "wiremock",
 ]
 
 [[package]]
