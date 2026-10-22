@@ -1,0 +1,5 @@
+[env]
+# Ubuntu's aarch64 GCC emits calls to libgcc's outlined atomics
+# (`__aarch64_ldadd4_sync`, …), which the static musl link does not include.
+# Inline them in C dependencies such as the vendored libdbus.
+CFLAGS_aarch64_unknown_linux_musl = "-mno-outline-atomics"
