@@ -7,6 +7,7 @@ use chrono::Local;
 use serde_json::json;
 use stravacz_core::api::{Day, Meal};
 use stravacz_core::wording::{day_note, meal_note};
+use unicode_width::UnicodeWidthStr;
 
 use super::{print, print_json};
 use crate::auth;
@@ -93,8 +94,8 @@ impl<'a> Table<'a> {
         Self {
             currency,
             id: widest(|meal| meal.id.to_string().len()),
-            label: widest(|meal| meal.label.chars().count()),
-            name: widest(|meal| meal.name.chars().count()).min(MAX_NAME_WIDTH),
+            label: widest(|meal| meal.label.width()),
+            name: widest(|meal| meal.name.width()).min(MAX_NAME_WIDTH),
         }
     }
 
@@ -118,15 +119,15 @@ impl<'a> Table<'a> {
         } else {
             format!("{} {}", meal.price, self.currency)
         };
-        let padding = " ".repeat(self.name.saturating_sub(meal.name.chars().count()));
+        let padding = pad(&meal.name, self.name);
         let (id, id_width) = (meal.id, self.id);
-        let (label, label_width) = (&meal.label, self.label);
+        let (label, label_padding) = (&meal.label, pad(&meal.label, self.label));
 
         let tag = meal_note(meal).unwrap_or_default();
 
         let mut row = format!(
             "  {icon_style}{icon}{icon_style:#} {ID}{id:>id_width$}{ID:#}  \
-             {LABEL}{label:<label_width$}{LABEL:#}  {name_style}{}{name_style:#}",
+             {LABEL}{label}{label_padding}{LABEL:#}  {name_style}{}{name_style:#}",
             meal.name,
         );
         if !price.is_empty() || !tag.is_empty() {
@@ -137,4 +138,9 @@ impl<'a> Table<'a> {
         }
         row
     }
+}
+
+/// Spaces that pad `text` to `width` terminal columns.
+fn pad(text: &str, width: usize) -> String {
+    " ".repeat(width.saturating_sub(text.width()))
 }

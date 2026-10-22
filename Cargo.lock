@@ -3265,6 +3265,7 @@ dependencies = [
  "serde_json",
  "stravacz-core",
  "tokio",
+ "unicode-width",
 ]
 
 [[package]]

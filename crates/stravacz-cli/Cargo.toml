@@ -22,6 +22,7 @@ serde.workspace = true
 serde_json.workspace = true
 stravacz-core.workspace = true
 tokio.workspace = true
+unicode-width.workspace = true
 
 [lints]
 workspace = true
