@@ -17,6 +17,24 @@ browser.
 > Always check that your order went through, and use it at your own risk: the
 > software comes with no warranty (see [License](#license)).
 
+## Install
+
+Prebuilt binaries for Linux (static, x86_64 and aarch64) and macOS are attached to
+each [GitHub release](https://github.com/jachym-vacek/stravacz/releases). The
+install scripts put them in `~/.cargo/bin`:
+
+```sh
+curl -LsSf https://github.com/jachym-vacek/stravacz/releases/latest/download/stravacz-tui-installer.sh | sh
+curl -LsSf https://github.com/jachym-vacek/stravacz/releases/latest/download/stravacz-cli-installer.sh | sh
+```
+
+With Nix, run either one straight from the repository:
+
+```sh
+nix run github:jachym-vacek/stravacz             # the TUI
+nix run github:jachym-vacek/stravacz#stravacz -- menu
+```
+
 ## TUI
 
 ```sh
@@ -102,6 +120,13 @@ STRAVA_BASE_URL=http://127.0.0.1:8555 nix develop --command cargo run -p stravac
 ```
 
 The same fake canteen is available to tests as `stravacz_api::mock` (feature `mock`).
+
+To release, bump `version` in the root `Cargo.toml`, commit, and push a matching
+tag (`git tag v0.2.0 && git push origin v0.2.0`). The release workflow, generated
+by [dist](https://opensource.axo.dev/cargo-dist/) from `dist-workspace.toml`,
+builds both binaries and publishes the GitHub release. A tag with a suffix such as
+`v0.2.0-rc.1` makes a prerelease. After changing the dist config, regenerate the
+workflow with `nix develop --command dist generate`.
 
 The API was reverse engineered from the web app, with help from
 [strava-cz-python](https://github.com/jsem-nerad/strava-cz-python), only to make

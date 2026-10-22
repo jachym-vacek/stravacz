@@ -5,6 +5,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
 
 [dependencies]
 directories.workspace = true
@@ -26,6 +27,11 @@ windows-native-keyring-store.workspace = true
 
 [target.'cfg(all(unix, not(any(target_os = "macos", target_os = "ios", target_os = "android"))))'.dependencies]
 dbus-secret-service-keyring-store.workspace = true
+
+[features]
+# Build libdbus from source and link it statically (no-op off Linux/BSD), for
+# self-contained release binaries such as the musl builds.
+vendored-dbus = ["dbus-secret-service-keyring-store/vendored"]
 
 [dev-dependencies]
 chrono.workspace = true

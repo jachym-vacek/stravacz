@@ -7,6 +7,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
 license = "MIT"
+repository = "https://github.com/jachym-vacek/stravacz"
 
 [workspace.dependencies]
 stravacz-api = { path = "crates/stravacz-api" }
@@ -52,3 +53,7 @@ missing_panics_doc = "allow"
 
 [profile.release]
 strip = true
+
+# The profile that `dist` builds release artifacts with.
+[profile.dist]
+inherits = "release"

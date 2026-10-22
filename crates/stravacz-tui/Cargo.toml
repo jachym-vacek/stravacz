@@ -5,10 +5,15 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
 
 [[bin]]
 name = "stravacz-tui"
 path = "src/main.rs"
+
+[features]
+# See `stravacz-core`; release builds enable it.
+vendored-dbus = ["stravacz-core/vendored-dbus"]
 
 [dependencies]
 chrono.workspace = true
