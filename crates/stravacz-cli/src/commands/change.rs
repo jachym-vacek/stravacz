@@ -32,10 +32,7 @@ async fn apply(
     let menu = session.menu().await?;
     let currency = &session.account().currency;
 
-    let mut ids: Vec<MealId> = args.meals.iter().copied().map(MealId).collect();
-    ids.sort_unstable();
-    ids.dedup();
-
+    let ids: Vec<MealId> = args.meals.iter().copied().map(MealId).collect();
     let (draft, unchanged) = plan(&menu, &ids, ordered)?;
     let changes = draft.changes();
 
@@ -136,7 +133,12 @@ async fn apply(
 }
 
 /// Work out the changes, and which meals are already in the wanted state.
+/// Repeated ids count once.
 fn plan<'m>(menu: &'m Menu, ids: &[MealId], ordered: bool) -> Result<(OrderDraft, Vec<&'m Meal>)> {
+    let mut ids = ids.to_vec();
+    ids.sort_unstable();
+    ids.dedup();
+
     let meals = ids
         .iter()
         .map(|&id| {
@@ -176,4 +178,112 @@ fn describe(meal: &Meal) -> String {
         meal.label,
         meal.name
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::NaiveDate;
+    use stravacz_core::api::{Change, Day, DayStatus, MealKind, Money, Restriction};
+
+    use super::*;
+
+    /// A main course on day `day` of September 2026.
+    fn lunch(id: u32, day: u32, ordered: bool, locked: bool) -> Meal {
+        let restriction = if locked {
+            Restriction::Closed
+        } else {
+            Restriction::None
+        };
+        Meal {
+            id: MealId(id),
+            date: NaiveDate::from_ymd_opt(2026, 9, day).unwrap(),
+            kind: MealKind::Main,
+            label: format!("Oběd {id}"),
+            name: format!("Meal {id}"),
+            price: Money::from_hundredths(5000),
+            ordered,
+            order_restriction: restriction.clone(),
+            cancel_restriction: restriction,
+            allergens: Vec::new(),
+            deadline: None,
+        }
+    }
+
+    fn menu(meals: Vec<Meal>) -> Menu {
+        let mut days: Vec<Day> = Vec::new();
+        for meal in meals {
+            match days.iter_mut().find(|day| day.date == meal.date) {
+                Some(day) => day.meals.push(meal),
+                None => days.push(Day {
+                    date: meal.date,
+                    status: DayStatus::Normal,
+                    meals: vec![meal],
+                }),
+            }
+        }
+        Menu::new(days)
+    }
+
+    fn ids(ids: &[u32]) -> Vec<MealId> {
+        ids.iter().copied().map(MealId).collect()
+    }
+
+    fn unchanged_ids(unchanged: &[&Meal]) -> Vec<MealId> {
+        unchanged.iter().map(|meal| meal.id).collect()
+    }
+
+    #[test]
+    fn orders_on_different_days_and_skips_repeats() {
+        let menu = menu(vec![lunch(1, 1, false, false), lunch(2, 2, false, false)]);
+
+        let (draft, unchanged) = plan(&menu, &ids(&[2, 1, 2]), true).unwrap();
+        assert_eq!(
+            draft.changes(),
+            [Change::order(MealId(1)), Change::order(MealId(2))]
+        );
+        assert_eq!(unchanged_ids(&unchanged), []);
+    }
+
+    #[test]
+    fn reports_meals_already_in_the_wanted_state() {
+        let menu = menu(vec![lunch(1, 1, true, false), lunch(2, 2, false, false)]);
+
+        let (draft, unchanged) = plan(&menu, &ids(&[1, 2]), true).unwrap();
+        assert_eq!(draft.changes(), [Change::order(MealId(2))]);
+        assert_eq!(unchanged_ids(&unchanged), ids(&[1]));
+
+        let (draft, unchanged) = plan(&menu, &ids(&[2]), false).unwrap();
+        assert!(draft.is_empty());
+        assert_eq!(unchanged_ids(&unchanged), ids(&[2]));
+    }
+
+    #[test]
+    fn ordering_a_lunch_swaps_out_the_ordered_one() {
+        let menu = menu(vec![lunch(1, 1, true, false), lunch(2, 1, false, false)]);
+
+        let (draft, _) = plan(&menu, &ids(&[2]), true).unwrap();
+        assert_eq!(
+            draft.changes(),
+            [Change::cancel(MealId(1)), Change::order(MealId(2))]
+        );
+    }
+
+    #[test]
+    fn refuses_two_lunches_on_one_day() {
+        let menu = menu(vec![lunch(1, 1, false, false), lunch(2, 1, false, false)]);
+
+        let err = plan(&menu, &ids(&[1, 2]), true).unwrap_err();
+        assert!(err.to_string().contains("only one per day"), "{err}");
+    }
+
+    #[test]
+    fn refuses_unknown_and_locked_meals() {
+        let menu = menu(vec![lunch(1, 1, true, true)]);
+
+        let err = plan(&menu, &ids(&[9]), true).unwrap_err();
+        assert!(err.to_string().contains("not on the menu"), "{err}");
+
+        let err = plan(&menu, &ids(&[1]), false).unwrap_err();
+        assert!(format!("{err:#}").contains("deadline"), "{err:#}");
+    }
 }
