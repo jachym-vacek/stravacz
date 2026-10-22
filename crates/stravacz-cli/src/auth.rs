@@ -42,9 +42,9 @@ pub async fn session(args: &AccountArgs) -> Result<Session> {
     let remembered = saved.filter(|login| {
         login.remember_password && login.canteen == canteen && login.username == username
     });
-    let password = match std::env::var(PASSWORD_VAR) {
-        Ok(password) => password,
-        Err(_) => match stored_password(remembered).await {
+    let password = match env_password()? {
+        Some(password) => password,
+        None => match stored_password(remembered).await {
             Some(password) => password,
             None => prompt_password(&username)?,
         },
@@ -72,6 +72,16 @@ async fn stored_password(login: Option<SavedLogin>) -> Option<String> {
             None
         }
         Err(_) => None,
+    }
+}
+
+/// The password from `STRAVA_PASSWORD`, if set.
+pub fn env_password() -> Result<Option<String>> {
+    match std::env::var(PASSWORD_VAR) {
+        Ok(password) if password.is_empty() => bail!("{PASSWORD_VAR} is set but empty"),
+        Ok(password) => Ok(Some(password)),
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Err(std::env::VarError::NotUnicode(_)) => bail!("{PASSWORD_VAR} is not valid UTF-8"),
     }
 }
 

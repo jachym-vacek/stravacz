@@ -28,9 +28,9 @@ pub async fn login(args: &AccountArgs, save_password: bool, json: bool) -> Resul
             saved.as_ref().map(|login| login.username.as_str()),
         )?,
     };
-    let password = match std::env::var("STRAVA_PASSWORD") {
-        Ok(password) => password,
-        Err(_) => auth::prompt_password(&username)?,
+    let password = match auth::env_password()? {
+        Some(password) => password,
+        None => auth::prompt_password(&username)?,
     };
 
     let credentials = Credentials::new(canteen, username, password);
