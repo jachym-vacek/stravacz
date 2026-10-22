@@ -319,16 +319,19 @@ impl App {
         let client = self.client.clone();
         let config = self.config.clone();
         let tx = self.tx.clone();
-        self.spawn(async move {
+        tokio::spawn(async move {
             let result = async {
                 let session = client.login(&credentials).await?;
                 let menu = session.menu().await?;
                 Ok((session, menu))
             }
             .await;
+            let worked = result.is_ok();
+            let _ = tx.send(Msg::LoggedIn(result));
 
-            // Only remember credentials that actually worked.
-            if result.is_ok() {
+            // Only remember credentials that actually worked. This comes after
+            // showing the menu, as the keyring may be slow or ask to be unlocked.
+            if worked {
                 let login = SavedLogin {
                     canteen: credentials.canteen,
                     username: credentials.username,
@@ -343,7 +346,6 @@ impl App {
                     let _ = tx.send(Msg::Warning(format!("Couldn't remember the login: {err}")));
                 }
             }
-            Msg::LoggedIn(result)
         });
     }
 
