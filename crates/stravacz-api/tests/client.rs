@@ -40,7 +40,12 @@ async fn logged_in() -> (MockServer, Session) {
 
 #[test]
 fn rejects_invalid_base_urls() {
-    for url in ["", "127.0.0.1:8555", "ftp://example.com", "http://exa mple.com"] {
+    for url in [
+        "",
+        "127.0.0.1:8555",
+        "ftp://example.com",
+        "http://exa mple.com",
+    ] {
         assert!(
             matches!(Client::with_base_url(url), Err(Error::InvalidBaseUrl(_))),
             "{url:?}"
@@ -77,6 +82,41 @@ async fn login_maps_the_error_envelope() {
         .unwrap_err();
     assert!(err.is_authentication(), "{err:?}");
     assert_eq!(err.to_string(), "Wrong nickname or password");
+}
+
+#[tokio::test]
+async fn error_envelope_is_detected_with_http_200() {
+    let (server, session) = logged_in().await;
+    Mock::given(path("/api/objednavky"))
+        .respond_with(ok(json!({
+            "state": "error", "number": 20, "message": "Session expired"
+        })))
+        .mount(&server)
+        .await;
+
+    let err = session.menu().await.unwrap_err();
+    assert!(err.is_authentication(), "{err:?}");
+}
+
+#[tokio::test]
+async fn non_json_body_is_an_unexpected_response() {
+    let (server, session) = logged_in().await;
+    Mock::given(path("/api/objednavky"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("<html>Maintenance</html>"))
+        .mount(&server)
+        .await;
+
+    let err = session.menu().await.unwrap_err();
+    assert!(
+        matches!(
+            err,
+            Error::UnexpectedResponse {
+                endpoint: "objednavky",
+                ..
+            }
+        ),
+        "{err:?}"
+    );
 }
 
 #[tokio::test]
@@ -135,6 +175,31 @@ async fn submit_stages_saves_and_verifies() {
     let submission = session.submit(&[Change::order(MealId(88))]).await.unwrap();
     assert_eq!(submission.balance, Some(Money::from_hundredths(46_000)));
     assert_eq!(submission.rejected, [MealId(88)]);
+}
+
+#[tokio::test]
+async fn submit_rejects_meals_missing_from_the_new_menu() {
+    let (server, session) = logged_in().await;
+    Mock::given(path("/api/pridejJidloS5"))
+        .respond_with(ok(json!({})))
+        .mount(&server)
+        .await;
+    Mock::given(path("/api/saveOrders"))
+        .respond_with(ok(json!({})))
+        .mount(&server)
+        .await;
+    Mock::given(path("/api/objednavky"))
+        .respond_with(ok(fixture("menu")))
+        .mount(&server)
+        .await;
+
+    // Meal 86 is ordered in the fixture; meal 999 is not on it at all.
+    let submission = session
+        .submit(&[Change::order(MealId(86)), Change::order(MealId(999))])
+        .await
+        .unwrap();
+    assert!(submission.is_verified());
+    assert_eq!(submission.rejected, [MealId(999)]);
 }
 
 #[tokio::test]
