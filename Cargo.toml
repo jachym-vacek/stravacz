@@ -16,24 +16,27 @@ chrono = { version = "0.4.45", default-features = false, features = ["std", "clo
 anstream = "1.0.0"
 anstyle = "1.0.14"
 anyhow = "1.0.104"
+apple-native-keyring-store = { version = "1.0.2", features = ["keychain"] }
 clap = { version = "4.6.7", features = ["derive", "env", "wrap_help"] }
 clap_complete = "4.6.11"
-color-eyre = "0.6.5"
 crossterm = { version = "0.29.0", features = ["event-stream"] }
+dbus-secret-service-keyring-store = { version = "1.0.1", features = ["crypto-rust"] }
 directories = "6.0.0"
 futures = "0.3.34"
-keyring = "4.2.0"
-ratatui = "0.30.2"
+keyring-core = "1.0.1"
+ratatui = { version = "0.30.2", default-features = false, features = ["crossterm", "layout-cache"] }
 rpassword = "7.5.4"
-reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "http2", "charset", "json", "cookies", "gzip"] }
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls-no-provider", "charset", "json", "cookies", "gzip"] }
+rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 thiserror = "2.0.21"
 tokio = { version = "1.54.1", features = ["macros", "rt-multi-thread", "sync", "time"] }
 toml = "1.1.8"
 tracing = "0.1.44"
-tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "std", "registry"] }
 unicode-width = "0.2.2"
+windows-native-keyring-store = "1.0.0"
 wiremock = "0.6.5"
 
 [workspace.lints.rust]

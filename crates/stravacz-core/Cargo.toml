@@ -8,12 +8,24 @@ license.workspace = true
 
 [dependencies]
 directories.workspace = true
-keyring.workspace = true
+keyring-core.workspace = true
 serde.workspace = true
 stravacz-api.workspace = true
 thiserror.workspace = true
 toml.workspace = true
 tracing.workspace = true
+
+# One credential store per platform, as the `keyring` crate's `v1` feature
+# picks them, but with the libdbus Secret Service client on Linux/BSD: zbus
+# would bring its own async runtime and ~90 more crates.
+[target.'cfg(target_os = "macos")'.dependencies]
+apple-native-keyring-store.workspace = true
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-native-keyring-store.workspace = true
+
+[target.'cfg(all(unix, not(any(target_os = "macos", target_os = "ios", target_os = "android"))))'.dependencies]
+dbus-secret-service-keyring-store.workspace = true
 
 [dev-dependencies]
 chrono.workspace = true
