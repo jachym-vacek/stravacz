@@ -1,8 +1,12 @@
+use std::env;
 use std::fs::{self, File};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use tracing_subscriber::EnvFilter;
+use tracing::Level;
+use tracing_subscriber::filter::Targets;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 /// Log to a file, since stdout belongs to the UI. Filter with `STRAVACZ_LOG`.
 ///
@@ -15,12 +19,22 @@ pub fn init() -> Option<PathBuf> {
     let path = dir.join("stravacz.log");
     let file = File::create(&path).ok()?;
 
-    let filter = EnvFilter::try_from_env("STRAVACZ_LOG")
-        .unwrap_or_else(|_| EnvFilter::new("info,stravacz_api=debug"));
-    tracing_subscriber::fmt()
-        .with_writer(Mutex::new(file))
-        .with_ansi(false)
-        .with_env_filter(filter)
+    // `Targets` takes `level,target=level,…` like `EnvFilter`, without regexes.
+    let filter = env::var("STRAVACZ_LOG")
+        .ok()
+        .and_then(|directives| directives.parse::<Targets>().ok())
+        .unwrap_or_else(|| {
+            Targets::new()
+                .with_default(Level::INFO)
+                .with_target("stravacz_api", Level::DEBUG)
+        });
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_writer(Mutex::new(file))
+                .with_ansi(false),
+        )
+        .with(filter)
         .init();
     Some(path)
 }

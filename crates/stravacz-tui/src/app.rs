@@ -5,7 +5,7 @@
 
 use std::time::Duration;
 
-use color_eyre::Result;
+use anyhow::Result;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use futures::StreamExt;
 use ratatui::{DefaultTerminal, Frame};

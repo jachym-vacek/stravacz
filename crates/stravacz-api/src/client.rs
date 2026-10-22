@@ -84,6 +84,9 @@ impl Client {
             header_value(&format!("{base_url}{LOGIN_PAGE}"))?,
         );
 
+        // reqwest is built without a bundled crypto provider (aws-lc-rs is a
+        // slow C build); use ring. Fails harmlessly if one is already set.
+        let _ = rustls::crypto::ring::default_provider().install_default();
         let http = reqwest::Client::builder()
             .user_agent(USER_AGENT)
             .default_headers(headers)
