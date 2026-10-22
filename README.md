@@ -78,7 +78,7 @@ or prefix single commands with `nix develop --command`:
 ```sh
 nix develop --command cargo test
 nix develop --command cargo clippy --all-targets --examples
-nix flake check          # what CI runs: build + tests, clippy, formatting
+nix flake check          # what CI runs: build, tests, clippy, docs, formatting, audit
 
 # A fake Strava.cz to click through without a real account:
 nix develop --command cargo run -p stravacz-api --example mock_server

@@ -5,11 +5,22 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - uses: cachix/install-nix-action@v31
-      # Builds and tests the package, runs clippy and checks formatting.
+      # Pulls cached derivations (dependencies included) and pushes new ones.
+      # Without the token (e.g. pull requests from forks) it only pulls.
+      - uses: cachix/cachix-action@v16
+        with:
+          name: stravacz
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      # Builds the package, runs tests, doctests, clippy, docs, formatting and
+      # the RustSec audit.
       - run: nix flake check --print-build-logs

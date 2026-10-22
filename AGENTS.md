@@ -13,7 +13,8 @@ nix develop --command cargo test -p stravacz-core draft::   # one crate / test f
 nix develop --command cargo test -p stravacz-api --test client submit_stages_saves_and_verifies
 nix develop --command cargo clippy --all-targets --examples   # must be warning-free
 nix develop --command cargo fmt --all
-nix flake check                                           # what CI runs: build + tests, clippy (-D warnings), fmt
+nix flake check                                           # what CI runs: build, nextest + doctests, clippy (-D warnings), docs, fmt, cargo-audit
+nix fmt                                                   # format flake.nix
 ```
 
 Workspace lints (root `Cargo.toml`) enable `clippy::pedantic` and forbid `unsafe`; keep clippy at zero warnings.

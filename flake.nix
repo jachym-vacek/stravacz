@@ -3,101 +3,131 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
+    crane.url = "github:ipetkov/crane";
+    advisory-db = {
+      url = "github:rustsec/advisory-db";
+      flake = false;
+    };
   };
 
   outputs =
     {
       self,
       nixpkgs,
-      flake-utils,
+      crane,
+      advisory-db,
     }:
-    flake-utils.lib.eachDefaultSystem (
-      system:
-      let
-        pkgs = nixpkgs.legacyPackages.${system};
-        inherit (pkgs) lib;
-        workspace = (lib.importTOML ./Cargo.toml).workspace.package;
-        src = lib.fileset.toSource {
-          root = ./.;
-          fileset = lib.fileset.unions [
-            ./Cargo.toml
-            ./Cargo.lock
-            ./crates
-          ];
-        };
-        package = self.packages.${system}.default;
-      in
-      {
-        packages.default = pkgs.rustPlatform.buildRustPackage {
-          pname = "stravacz";
-          inherit (workspace) version;
+    let
+      inherit (nixpkgs) lib;
+      forAllSystems = lib.genAttrs [
+        "x86_64-linux"
+        "aarch64-linux"
+        "x86_64-darwin"
+        "aarch64-darwin"
+      ];
 
-          inherit src;
-          cargoLock.lockFile = ./Cargo.lock;
+      perSystem =
+        system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+          craneLib = crane.mkLib pkgs;
 
-          # aws-lc-rs (rustls' crypto provider) is built from C sources.
-          nativeBuildInputs = [ pkgs.cmake ];
-          # The TLS client loads system CA certificates even in tests.
-          nativeCheckInputs = [ pkgs.cacert ];
-
-          meta = {
-            description = "Order school canteen meals from Strava.cz in your terminal";
-            license = lib.licenses.mit;
-            mainProgram = "stravacz-tui";
+          src = lib.fileset.toSource {
+            root = ./.;
+            fileset = lib.fileset.unions [
+              (craneLib.fileset.commonCargoSources ./.)
+              ./crates/stravacz-api/tests/fixtures
+            ];
           };
-        };
 
-        apps.default = flake-utils.lib.mkApp { drv = package; };
+          commonArgs = {
+            pname = "stravacz";
+            inherit (craneLib.crateNameFromCargoToml { cargoToml = ./Cargo.toml; }) version;
+            inherit src;
+            strictDeps = true;
+            # aws-lc-rs (rustls' crypto provider) is built from C sources.
+            nativeBuildInputs = [ pkgs.cmake ];
+          };
 
-        # `nix flake check`: build and test, clippy, and formatting.
-        checks = {
-          # The package's check phase runs `cargo test`.
-          default = package;
+          # Dependencies only depend on Cargo.toml/Cargo.lock, so source edits
+          # reuse this derivation in every build and check below.
+          cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 
-          clippy = package.overrideAttrs (old: {
-            pname = "stravacz-clippy";
-            nativeBuildInputs = old.nativeBuildInputs ++ [ pkgs.clippy ];
-            buildPhase = ''
-              runHook preBuild
-              cargo clippy --offline --frozen --all-targets --examples -- --deny warnings
-              runHook postBuild
-            '';
-            doCheck = false;
-            installPhase = "touch $out";
-            dontFixup = true;
-          });
+          package = craneLib.buildPackage (
+            commonArgs
+            // {
+              inherit cargoArtifacts;
+              # Tests run as separate checks.
+              doCheck = false;
+              meta = {
+                description = "Order school canteen meals from Strava.cz in your terminal";
+                license = lib.licenses.mit;
+                mainProgram = "stravacz-tui";
+              };
+            }
+          );
+        in
+        {
+          packages.default = package;
 
-          fmt =
-            pkgs.runCommand "stravacz-fmt"
-              {
-                nativeBuildInputs = [
-                  pkgs.cargo
-                  pkgs.rustfmt
-                  pkgs.nixfmt
-                ];
+          checks = {
+            inherit package;
+
+            clippy = craneLib.cargoClippy (
+              commonArgs
+              // {
+                inherit cargoArtifacts;
+                cargoClippyExtraArgs = "--all-targets --examples -- --deny warnings";
               }
-              ''
-                cd ${src}
-                cargo fmt --all --check
-                nixfmt --check ${./flake.nix}
-                touch $out
-              '';
+            );
+
+            tests = craneLib.cargoNextest (
+              commonArgs
+              // {
+                inherit cargoArtifacts;
+                # The TLS client loads system CA certificates even in tests.
+                nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ pkgs.cacert ];
+              }
+            );
+
+            doctests = craneLib.cargoDocTest (commonArgs // { inherit cargoArtifacts; });
+
+            doc = craneLib.cargoDoc (
+              commonArgs
+              // {
+                inherit cargoArtifacts;
+                RUSTDOCFLAGS = "--deny warnings";
+              }
+            );
+
+            fmt = craneLib.cargoFmt { inherit src; };
+
+            nixfmt = pkgs.runCommand "nixfmt-check" { nativeBuildInputs = [ pkgs.nixfmt ]; } ''
+              nixfmt --check ${./flake.nix}
+              touch $out
+            '';
+
+            audit = craneLib.cargoAudit { inherit src advisory-db; };
+          };
+
+          devShells.default = craneLib.devShell {
+            checks = self.checks.${system};
+            packages = [
+              pkgs.rust-analyzer
+              pkgs.cargo-nextest
+            ];
+            RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
+          };
+
+          formatter = pkgs.nixfmt-tree;
         };
 
-        devShells.default = pkgs.mkShell {
-          inputsFrom = [ package ];
-          packages = with pkgs; [
-            cargo
-            rustc
-            clippy
-            rustfmt
-            rust-analyzer
-          ];
-          RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
-        };
-
-        formatter = pkgs.nixfmt;
-      }
-    );
+      bySystem = forAllSystems perSystem;
+    in
+    {
+      packages = lib.mapAttrs (_: s: s.packages) bySystem;
+      checks = lib.mapAttrs (_: s: s.checks) bySystem;
+      devShells = lib.mapAttrs (_: s: s.devShells) bySystem;
+      formatter = lib.mapAttrs (_: s: s.formatter) bySystem;
+    };
 }
