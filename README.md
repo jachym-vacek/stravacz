@@ -5,6 +5,18 @@ ordering system: a full-screen TUI (`stravacz-tui`) and a scriptable CLI (`strav
 Browse the menu, order or cancel lunches, and see your balance without opening a
 browser.
 
+> [!IMPORTANT]
+> **Unofficial project.** stravacz is an independent, community-made client. It is
+> not affiliated with, endorsed by, or supported by VIS Plzeň, s.r.o., the company
+> behind Strava.cz, nor with Strava, Inc. (the fitness app). "Strava.cz" is used
+> only to say which service this program works with. Do not contact your canteen or
+> VIS Plzeň about problems with stravacz; [open an issue](https://github.com/jachym-vacek/stravacz/issues)
+> instead.
+>
+> stravacz talks to an undocumented API that can change or break at any time.
+> Always check that your order went through, and use it at your own risk: the
+> software comes with no warranty (see [License](#license)).
+
 ## Install
 
 Prebuilt binaries for Linux (static, x86_64 and aarch64) and macOS are attached to
@@ -28,6 +40,9 @@ nix run github:jachym-vacek/stravacz#stravacz -- menu
 ```sh
 cargo run -p stravacz-tui    # or: nix run
 ```
+
+Building outside Nix on Linux needs `pkg-config` and the libdbus headers
+(`libdbus-1-dev` / `dbus-devel`) for the keyring.
 
 Log in with your canteen number, username and password. With *Remember password*
 checked, the password goes to the system keyring (Secret Service / Keychain /
@@ -114,7 +129,10 @@ builds both binaries and publishes the GitHub release. A tag with a suffix such 
 workflow with `nix develop --command dist generate`.
 
 The API was reverse engineered from the web app, with help from
-[strava-cz-python](https://github.com/jsem-nerad/strava-cz-python).
+[strava-cz-python](https://github.com/jsem-nerad/strava-cz-python), only to make
+this client interoperate with it. No Strava.cz code or data is included. Requests
+identify themselves with the User-Agent `stravacz/<version> (unofficial client; +<repo URL>)`
+and are only made when you ask for something: nothing polls in the background.
 
 ## License
 

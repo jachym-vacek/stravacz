@@ -12,9 +12,14 @@ use crate::raw::{self, LoginResponse};
 /// Where the web app lives.
 pub const DEFAULT_BASE_URL: &str = "https://app.strava.cz";
 
-/// The API is picky about clients that do not look like its own web app.
-const USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 \
-                          (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36";
+/// Identify honestly as this unofficial client, so the operator can tell its
+/// traffic apart and knows where to reach the maintainers. The API does not
+/// filter on it: login answers the same to a browser, this and `curl`.
+const USER_AGENT: &str = concat!(
+    "stravacz/",
+    env!("CARGO_PKG_VERSION"),
+    " (unofficial client; +https://github.com/jachym-vacek/stravacz)"
+);
 const LANGUAGE: &str = "EN";
 const LOGIN_PAGE: &str = "/en/prihlasit-se?jidelna";
 
@@ -84,6 +89,9 @@ impl Client {
             header_value(&format!("{base_url}{LOGIN_PAGE}"))?,
         );
 
+        // reqwest is built without a bundled crypto provider (aws-lc-rs is a
+        // slow C build); use ring. Fails harmlessly if one is already set.
+        let _ = rustls::crypto::ring::default_provider().install_default();
         let http = reqwest::Client::builder()
             .user_agent(USER_AGENT)
             .default_headers(headers)

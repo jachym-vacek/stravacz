@@ -11,6 +11,10 @@ repository.workspace = true
 name = "stravacz"
 path = "src/main.rs"
 
+[features]
+# See `stravacz-core`; release builds enable it.
+vendored-dbus = ["stravacz-core/vendored-dbus"]
+
 [dependencies]
 anstream.workspace = true
 anstyle.workspace = true

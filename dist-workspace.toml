@@ -9,8 +9,10 @@ cargo-dist-version = "0.33.0"
 ci = "github"
 # The installers to generate for each app
 installers = ["shell"]
+# Linux builds are static (musl), so they run on any distribution; that needs
+# libdbus built from source.
+features = ["vendored-dbus"]
 # Target platforms to build apps for (Rust target-triple syntax)
-# Linux builds are static (musl), so they run on any distribution.
 targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-musl", "x86_64-apple-darwin", "x86_64-unknown-linux-musl"]
 # Path that installers should place binaries in
 install-path = "CARGO_HOME"

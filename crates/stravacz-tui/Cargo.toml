@@ -11,9 +11,13 @@ repository.workspace = true
 name = "stravacz-tui"
 path = "src/main.rs"
 
+[features]
+# See `stravacz-core`; release builds enable it.
+vendored-dbus = ["stravacz-core/vendored-dbus"]
+
 [dependencies]
 chrono.workspace = true
-color-eyre.workspace = true
+anyhow.workspace = true
 crossterm.workspace = true
 futures.workspace = true
 ratatui.workspace = true
