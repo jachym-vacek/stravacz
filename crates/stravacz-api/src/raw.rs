@@ -126,7 +126,12 @@ pub(crate) fn parse_menu(response: &Value) -> Menu {
         if status != DayStatus::Normal {
             day.status = status;
         }
-        if day.status == DayStatus::NoService || is_placeholder(&raw.nazev, &raw.druh_popis) {
+        if day.status == DayStatus::NoService {
+            // Rows read before the day turned out to be closed don't count either.
+            day.meals.clear();
+            continue;
+        }
+        if is_placeholder(&raw.nazev, &raw.druh_popis) {
             continue;
         }
 
@@ -306,6 +311,24 @@ mod tests {
         assert_eq!(parse_date("2/9/2026"), NaiveDate::from_ymd_opt(2026, 9, 2));
         assert_eq!(parse_date("31.02.2026"), None);
         assert_eq!(parse_date(""), None);
+    }
+
+    #[test]
+    fn no_service_day_drops_earlier_meals() {
+        let row = |veta: &str, den: &str| {
+            serde_json::json!({
+                "datum": "02.09.2026", "druh": "O1", "druh_popis": "Oběd 1",
+                "nazev": "Kuřecí řízek", "cena": "50", "veta": veta,
+                "omezeniObj": { "den": den },
+            })
+        };
+        let menu = parse_menu(&serde_json::json!({
+            "table0": [row("1", ""), row("2", "VP"), row("3", "")],
+        }));
+
+        let day = &menu.days()[0];
+        assert_eq!(day.status, DayStatus::NoService);
+        assert_eq!(day.meals, Vec::new());
     }
 
     #[test]
