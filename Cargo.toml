@@ -51,5 +51,4 @@ missing_errors_doc = "allow"
 missing_panics_doc = "allow"
 
 [profile.release]
-lto = "thin"
 strip = true
