@@ -233,4 +233,54 @@ mod tests {
         draft.rebase(&menu(vec![meal(1, MealKind::Main, true, false)]));
         assert!(draft.is_empty());
     }
+
+    #[test]
+    fn rebase_drops_impossible_changes() {
+        let mut draft = OrderDraft::new();
+        draft
+            .toggle(
+                &menu(vec![
+                    meal(1, MealKind::Main, false, false),
+                    meal(2, MealKind::Soup, false, false),
+                ]),
+                MealId(1),
+            )
+            .unwrap();
+        draft
+            .toggle(
+                &menu(vec![meal(2, MealKind::Soup, false, false)]),
+                MealId(2),
+            )
+            .unwrap();
+        assert_eq!(draft.len(), 2);
+
+        // Meal 1 is past its deadline now; meal 2 is still open.
+        draft.rebase(&menu(vec![
+            meal(1, MealKind::Main, false, true),
+            meal(2, MealKind::Soup, false, false),
+        ]));
+        assert_eq!(draft.changes(), [Change::order(MealId(2))]);
+
+        // Meal 2 is gone from the menu.
+        draft.rebase(&menu(vec![meal(1, MealKind::Main, false, true)]));
+        assert!(draft.is_empty());
+    }
+
+    #[test]
+    fn cost_of_a_swap_is_the_price_difference() {
+        let mut cheap = meal(1, MealKind::Main, true, false);
+        cheap.price = Money::from_hundredths(5000);
+        let mut dear = meal(2, MealKind::Main, false, false);
+        dear.price = Money::from_hundredths(5850);
+        let menu = menu(vec![cheap, dear]);
+        let mut draft = OrderDraft::new();
+
+        draft.toggle(&menu, MealId(2)).unwrap();
+        assert_eq!(draft.cost(&menu), Money::from_hundredths(850));
+
+        // Swapping back cancels both changes.
+        draft.toggle(&menu, MealId(1)).unwrap();
+        assert!(draft.is_empty());
+        assert_eq!(draft.cost(&menu), Money::ZERO);
+    }
 }
