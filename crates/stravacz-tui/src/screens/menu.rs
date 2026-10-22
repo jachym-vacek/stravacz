@@ -49,6 +49,13 @@ impl MenuScreen {
         &self.draft
     }
 
+    /// Take over pending changes from an earlier session, dropping any that
+    /// no longer apply.
+    pub fn restore_draft(&mut self, mut draft: OrderDraft) {
+        draft.rebase(&self.menu);
+        self.draft = draft;
+    }
+
     /// Show a freshly loaded menu, keeping the selection and pending changes.
     pub fn set_menu(&mut self, menu: Menu) {
         let date = self.current_day().map(|day| day.date);

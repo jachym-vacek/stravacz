@@ -9,9 +9,9 @@ use color_eyre::Result;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use futures::StreamExt;
 use ratatui::{DefaultTerminal, Frame};
-use stravacz_core::api::{self, Client, Credentials, Menu, Session, Submission};
+use stravacz_core::api::{self, Account, Client, Credentials, Menu, Session, Submission};
 use stravacz_core::secrets::{self, SecretError};
-use stravacz_core::{ConfigStore, SavedLogin, remember_login};
+use stravacz_core::{ConfigStore, OrderDraft, SavedLogin, remember_login};
 use tokio::sync::mpsc::{self, UnboundedSender};
 use tokio::time::MissedTickBehavior;
 
@@ -114,9 +114,25 @@ struct App {
     toast: Option<Toast>,
     /// What is running in the background, if anything.
     busy: Option<Task>,
+    /// Pending changes from a session that expired, for when the same
+    /// account logs in again.
+    resume: Option<Resume>,
     tick: usize,
     tx: UnboundedSender<Msg>,
     running: bool,
+}
+
+#[derive(Debug)]
+struct Resume {
+    canteen: String,
+    username: String,
+    draft: OrderDraft,
+}
+
+impl Resume {
+    fn is_for(&self, account: &Account) -> bool {
+        self.canteen == account.canteen_number && self.username == account.username
+    }
 }
 
 impl App {
@@ -141,6 +157,7 @@ impl App {
             overlay: Overlay::None,
             toast,
             busy: None,
+            resume: None,
             tick: 0,
             tx,
             running: true,
@@ -396,9 +413,26 @@ impl App {
                 self.busy = None;
                 match result {
                     Ok((session, menu)) => {
+                        let resume = self
+                            .resume
+                            .take()
+                            .filter(|resume| resume.is_for(session.account()));
                         let name = session.account().full_name.clone();
-                        self.screen = Screen::Menu(Box::new(MenuScreen::new(session, menu)));
-                        self.toast = Some(Toast::success(format!("Welcome, {name}!")));
+                        let mut screen = MenuScreen::new(session, menu);
+                        self.toast = Some(Toast::success(match resume {
+                            Some(resume) => {
+                                screen.restore_draft(resume.draft);
+                                match screen.draft().len() {
+                                    0 => "Logged in again.".to_owned(),
+                                    1 => "Logged in again; your pending change is kept.".to_owned(),
+                                    n => format!(
+                                        "Logged in again; your {n} pending changes are kept."
+                                    ),
+                                }
+                            }
+                            None => format!("Welcome, {name}!"),
+                        }));
+                        self.screen = Screen::Menu(Box::new(screen));
                     }
                     Err(err) => {
                         tracing::warn!(%err, "login failed");
@@ -435,8 +469,19 @@ impl App {
 
     fn on_api_error(&mut self, err: &api::Error) {
         tracing::warn!(%err, "request failed");
-        if err.is_authentication() && matches!(self.screen, Screen::Menu(_)) {
+        if err.is_authentication()
+            && let Screen::Menu(screen) = &self.screen
+        {
+            if !screen.draft().is_empty() {
+                let account = screen.session().account();
+                self.resume = Some(Resume {
+                    canteen: account.canteen_number.clone(),
+                    username: account.username.clone(),
+                    draft: screen.draft().clone(),
+                });
+            }
             self.show_login(Some(format!("Session expired: {err}")));
+            self.restore_saved_login();
         } else {
             self.toast = Some(Toast::error(err.to_string()));
         }
@@ -457,7 +502,7 @@ mod tests {
     struct Harness {
         app: App,
         rx: UnboundedReceiver<Msg>,
-        _server: MockServer,
+        server: MockServer,
         dir: PathBuf,
     }
 
@@ -472,7 +517,7 @@ mod tests {
             Self {
                 app,
                 rx,
-                _server: server,
+                server,
                 dir,
             }
         }
@@ -586,6 +631,36 @@ mod tests {
         harness.settle().await;
         harness.app.on_key(ctrl_c);
         assert!(!harness.app.running);
+    }
+
+    #[tokio::test]
+    async fn expired_session_keeps_pending_changes() {
+        let mut harness = Harness::logged_in("expired").await;
+        harness.pick_lunch();
+        let changes = harness.menu().draft().changes();
+
+        mock::expire_session(&harness.server).await;
+        harness.press(KeyCode::Char('r'));
+        harness.settle().await;
+        assert!(matches!(harness.app.screen, Screen::Login(_)));
+
+        harness.login("jan.novak").await;
+        assert_eq!(harness.menu().draft().changes(), changes);
+        assert!(harness.toast().contains("kept"), "{}", harness.toast());
+    }
+
+    #[tokio::test]
+    async fn expired_session_changes_are_not_given_to_another_account() {
+        let mut harness = Harness::logged_in("expired-other").await;
+        harness.pick_lunch();
+
+        mock::expire_session(&harness.server).await;
+        harness.press(KeyCode::Char('s'));
+        harness.settle().await;
+        assert!(matches!(harness.app.screen, Screen::Login(_)));
+
+        harness.login("eva.novakova").await;
+        assert!(harness.menu().draft().is_empty());
     }
 
     #[tokio::test]

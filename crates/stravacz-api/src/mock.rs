@@ -41,6 +41,20 @@ pub async fn start_on(listener: TcpListener) -> MockServer {
     serve(MockServer::builder().listener(listener).start().await).await
 }
 
+/// Make the next API call other than logging in fail as if the session had
+/// expired.
+pub async fn expire_session(server: &MockServer) {
+    Mock::given(method("POST"))
+        .and(|request: &Request| request.url.path() != "/api/login")
+        .respond_with(ResponseTemplate::new(555).set_body_json(json!({
+            "state": "error", "number": 20, "message": "Session expired"
+        })))
+        .with_priority(1)
+        .up_to_n_times(1)
+        .mount(server)
+        .await;
+}
+
 async fn serve(server: MockServer) -> MockServer {
     Mock::given(method("POST"))
         .respond_with(Canteen::default())
